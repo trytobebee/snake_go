@@ -4,7 +4,8 @@ import "time"
 
 // Point represents a coordinate on the game board
 type Point struct {
-	X, Y int
+	X int `json:"x"`
+	Y int `json:"y"`
 }
 
 // FoodType represents different types of food

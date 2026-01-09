@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🐍 Snake Game - Web Version</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="game-header">
+            <h1>🐍 SNAKE GAME</h1>
+            <p class="subtitle">Web Version - Premium Edition</p>
+        </header>
+
+        <!-- Stats Panel -->
+        <div class="stats-panel">
+            <div class="stat-item">
+                <span class="stat-label">Score</span>
+                <span class="stat-value" id="score">0</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Speed</span>
+                <span class="stat-value" id="speed">0.00</span>
+                <span class="stat-unit">个/秒</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">Eaten</span>
+                <span class="stat-value" id="eaten">0</span>
+            </div>
+            <div class="stat-item boost-indicator" id="boostIndicator">
+                <span class="boost-icon">🚀</span>
+                <span class="boost-text">BOOST!</span>
+            </div>
+        </div>
+
+        <!-- Message Display -->
+        <div class="message-display" id="messageDisplay"></div>
+
+        <!-- Game Canvas -->
+        <div class="game-container">
+            <canvas id="gameCanvas"></canvas>
+            <div class="game-overlay" id="gameOverlay">
+                <h2 id="overlayTitle">Ready to Play?</h2>
+                <p id="overlayMessage">Press SPACE to start</p>
+            </div>
+        </div>
+
+        <!-- Controls Info -->
+        <div class="controls-panel">
+            <h3>🎮 Controls</h3>
+            <div class="controls-grid">
+                <div class="control-item">
+                    <kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd>
+                    <span>or</span>
+                    <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>
+                    <span>Move</span>
+                </div>
+                <div class="control-item">
+                    <kbd>Space</kbd> / <kbd>P</kbd>
+                    <span>Pause</span>
+                </div>
+                <div class="control-item">
+                    <kbd>R</kbd>
+                    <span>Restart</span>
+                </div>
+                <div class="control-item">
+                    <span class="tip">💡 Hold direction key for 🚀 BOOST!</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Legend -->
+        <div class="legend">
+            <h3>🎯 Food Types</h3>
+            <div class="legend-grid">
+                <div class="legend-item">
+                    <span class="food-icon red">🔴</span>
+                    <span>Red: 40pts (10s)</span>
+                </div>
+                <div class="legend-item">
+                    <span class="food-icon orange">🟠</span>
+                    <span>Orange: 30pts (15s)</span>
+                </div>
+                <div class="legend-item">
+                    <span class="food-icon blue">🔵</span>
+                    <span>Blue: 20pts (18s)</span>
+                </div>
+                <div class="legend-item">
+                    <span class="food-icon purple">🟣</span>
+                    <span>Purple: 10pts (20s)</span>
+                </div>
+            </div>
+            <div class="bonus-info">
+                <p>🏆 Corner Bonus: <strong>+100 pts</strong></p>
+                <p>⭐ Edge Bonus: <strong>+30 pts</strong></p>
+            </div>
+        </div>
+
+        <!-- Connection Status -->
+        <div class="connection-status" id="connectionStatus">
+            <span class="status-dot"></span>
+            <span class="status-text">Connecting...</span>
+        </div>
+    </div>
+
+    <script src="game.js"></script>
+</body>
+</html>
