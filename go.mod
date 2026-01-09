@@ -1,4 +1,4 @@
-module snake_go
+module github.com/trytobebee/snake_go
 
 go 1.25.5
 

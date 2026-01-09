@@ -1,7 +1,9 @@
 # Binaries
+snake
 snake_game
 snake_game.exe
 snake_game_*
+snake_new
 *.exe
 *.exe~
 *.dll

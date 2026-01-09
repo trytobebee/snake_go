@@ -1,117 +1,195 @@
 # 🐍 Snake Game (Go Terminal)
 
-一个使用 Go 语言编写的终端贪吃蛇游戏，使用 Emoji 字符渲染，支持跨平台。
+A terminal-based Snake game written in Go, featuring emoji rendering and cross-platform support.
 
 ![Go Version](https://img.shields.io/badge/Go-1.19+-00ADD8?style=flat&logo=go)
 ![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
-## ✨ 特性
+## ✨ Features
 
-- 🎮 经典贪吃蛇玩法
-- 🎨 使用 Emoji 字符渲染，视觉效果佳
-- ⌨️ 支持方向键和 WASD 控制
-- ⏸️ 支持暂停/继续游戏
-- 💥 碰撞爆炸效果
-- 🔄 游戏结束后可快速重开
-- 📦 单文件编译，无依赖运行
+- 🎮 Classic snake gameplay
+- 🎨 Beautiful emoji-based rendering
+- ⌨️ Arrow keys and WASD controls
+- ⏸️ Pause/resume functionality
+- 💥 Crash explosion effects
+- 🔄 Quick restart after game over
+- 🚀 Boost mode (hold direction key)
+- 🍎 Multiple food types with different scores and expiry times
+- 📊 Real-time statistics (score, eating speed, food count)
+- 📦 Single binary, no runtime dependencies
 
-## 🎯 游戏截图
-![游戏截图](assets/snake_go.png)
+## 🎯 Game Features
 
-## 🚀 快速开始
+### Multi-Type Food System
+- 🔴 Red (40 points, 10s) - 15% spawn rate
+- 🟠 Orange (30 points, 15s) - 20% spawn rate
+- 🔵 Blue (20 points, 18s) - 25% spawn rate
+- 🟣 Purple (10 points, 20s) - 35% spawn rate
 
-### 从源码运行
+### Countdown Display
+Foods show a countdown timer in the last 5 seconds (🔴⁵ → 🔴¹)
+
+### Boost Mechanism
+Hold the current direction key to trigger 3x speed boost 🚀
+
+### Real-time Stats
+- Current score
+- Eating speed (foods/second)
+- Total foods eaten
+
+## 🚀 Quick Start
+
+### Run from Source
 
 ```bash
-# 克隆仓库
-git clone https://github.com/YOUR_USERNAME/snake_go.git
+# Clone repository
+git clone https://github.com/trytobebee/snake_go.git
 cd snake_go
 
-# 安装依赖
+# Install dependencies
 go mod tidy
 
-# 运行游戏
-go run main.go
+# Run game
+go run ./cmd/snake
 ```
 
-### 编译可执行文件
+### Build Executable
 
 ```bash
-# 编译当前平台
-go build -o snake_game main.go
+# Build for current platform
+go build -o snake ./cmd/snake
 
-# 运行
-./snake_game
+# Run
+./snake
 ```
 
-### 交叉编译
+### Cross-Platform Build
 
-使用构建脚本编译多平台版本：
+Use the build script to compile for all platforms:
 
 ```bash
 chmod +x build.sh
 ./build.sh
 ```
 
-这将在 `dist/` 目录生成：
+This creates executables in `dist/`:
 - `snake_game_mac_arm64` - macOS Apple Silicon
 - `snake_game_mac_amd64` - macOS Intel
 - `snake_game_windows.exe` - Windows
 - `snake_game_linux` - Linux
 
-## 🎮 游戏控制
+## 🎮 Game Controls
 
-| 按键 | 动作 |
-|------|------|
-| ↑ / W | 向上移动 |
-| ↓ / S | 向下移动 |
-| ← / A | 向左移动 |
-| → / D | 向右移动 |
-| P / 空格 | 暂停/继续 |
-| Q | 退出游戏 |
-| R | 重新开始（游戏结束后）|
+| Key | Action |
+|------|--------|
+| ↑ / W | Move up |
+| ↓ / S | Move down |
+| ← / A | Move left |
+| → / D | Move right |
+| P / Space | Pause/resume |
+| Q | Quit game |
+| R | Restart (after game over) |
 
-## 🎨 游戏元素
+## 🎨 Game Elements
 
-| Emoji | 含义 |
-|-------|------|
-| ⬜ | 墙壁 |
-| 🟢 | 蛇头 |
-| 🟩 | 蛇身 |
-| 🔴 | 食物 |
-| 💥 | 碰撞点 |
+| Emoji | Meaning |
+|-------|---------|
+| ⬜ | Wall |
+| 🟢 | Snake head |
+| 🟩 | Snake body |
+| 🔴🟠🔵🟣 | Food (different types) |
+| 💥 | Crash point |
 
-## 📁 项目结构
+## 📁 Project Structure
+
+The project follows a clean package architecture:
 
 ```
 snake_go/
-├── main.go      # 游戏主程序
-├── build.sh     # 多平台构建脚本
-├── go.mod       # Go 模块文件
-├── go.sum       # 依赖校验文件
-└── README.md    # 项目说明
+├── cmd/
+│   └── snake/
+│       └── main.go           # Entry point, game loop orchestration
+├── pkg/
+│   ├── game/                 # Core game logic
+│   │   ├── types.go         # Game data structures
+│   │   ├── game.go          # Game state management
+│   │   └── food.go          # Food-related logic
+│   ├── renderer/             # Rendering layer
+│   │   └── terminal.go      # Terminal-based renderer
+│   ├── input/                # Input handling
+│   │   └── keyboard.go      # Keyboard input management
+│   └── config/               # Configuration
+│       └── config.go        # Game constants and settings
+├── build.sh                  # Multi-platform build script
+├── go.mod                    # Go module definition
+└── README.md                 # This file
 ```
 
-## 🔧 依赖
+### Package Responsibilities
 
-- [github.com/eiannone/keyboard](https://github.com/eiannone/keyboard) - 终端键盘输入处理
+- **`cmd/snake`**: Main entry point, coordinates all components
+- **`pkg/game`**: Core game logic (snake movement, collision, scoring)
+- **`pkg/renderer`**: Rendering abstraction (could support multiple renderers)
+- **`pkg/input`**: Input handling abstraction
+- **`pkg/config`**: Centralized configuration and constants
 
-## 📝 实现原理
+## 🔧 Dependencies
 
-### 蛇的移动
-蛇使用坐标点数组存储，移动时在头部插入新坐标，删除尾部坐标，形成移动效果。
+- [github.com/eiannone/keyboard](https://github.com/eiannone/keyboard) - Terminal keyboard input
 
-### 游戏循环
-使用 Go 的 `time.Ticker` + `select` 实现事件驱动的游戏循环，同时处理定时更新和键盘输入。
+## 📝 Implementation Details
 
-### 渲染
-使用 Emoji 字符进行渲染，解决了传统 ASCII 字符在终端中宽高比不一致的问题。
+### Snake Movement
+Snake represented as coordinate array. Movement adds new head position and removes tail, creating smooth motion.
+
+### Game Loop
+Event-driven loop using Go's `time.Ticker` + `select`, handling both timed updates and keyboard input.
+
+### Rendering
+- ANSI escape codes for fast screen clearing (no external `clear` command)
+- `strings.Builder` for buffered output (single write operation)
+- Pre-allocated board to reduce GC pressure
+- Emoji characters solve terminal aspect ratio issues
+
+### Performance Optimizations
+- Pre-allocated rendering buffers
+- Single stdout write per frame
+- Reusable data structures
+- ANSI codes instead of shell commands
+
+## 🏗️ Development
+
+### Building
+```bash
+go build -o snake ./cmd/snake
+```
+
+### Testing
+```bash
+go test ./...
+```
+
+### Linting
+```bash
+golangci-lint run
+```
 
 ## 📄 License
 
 MIT License
 
-## 🤝 贡献
+## 🤝 Contributing
 
-欢迎提交 Issue 和 Pull Request！
+Contributions welcome! Please feel free to submit issues and pull requests.
+
+## 🎯 Future Enhancements
+
+- [ ] High score persistence
+- [ ] Difficulty levels
+- [ ] Power-ups (shield, time freeze, etc.)
+- [ ] Obstacles
+- [ ] Combo scoring system
+- [ ] Sound effects (optional)
+- [ ] Web-based renderer
+- [ ] Multiplayer mode
