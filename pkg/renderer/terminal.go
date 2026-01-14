@@ -21,6 +21,8 @@ const (
 	cellHead
 	cellBody
 	cellCrash
+	cellAIHead
+	cellAIBody
 )
 
 // NewTerminalRenderer creates a new terminal renderer
@@ -102,6 +104,15 @@ func (r *TerminalRenderer) Render(g *game.Game, boosting bool) {
 		}
 	}
 
+	// Draw AI snake
+	for i, p := range g.AISnake {
+		if i == 0 {
+			r.board[p.Y][p.X] = cellAIHead
+		} else {
+			r.board[p.Y][p.X] = cellAIBody
+		}
+	}
+
 	// Draw crash point if game over
 	if g.GameOver {
 		if g.CrashPoint.X >= 0 && g.CrashPoint.X < config.Width &&
@@ -114,13 +125,12 @@ func (r *TerminalRenderer) Render(g *game.Game, boosting bool) {
 	r.buffer.WriteString("\n  🐍 SNAKE GAME 🐍\n")
 
 	// Header with stats
+	boostStr := ""
 	if boosting {
-		r.buffer.WriteString(fmt.Sprintf("  Score: %d  |  吃豆速度: %.2f 个/秒  |  已吃: %d 个  |  🚀 BOOST!\n",
-			g.Score, g.GetEatingSpeed(), g.FoodEaten))
-	} else {
-		r.buffer.WriteString(fmt.Sprintf("  Score: %d  |  吃豆速度: %.2f 个/秒  |  已吃: %d 个\n",
-			g.Score, g.GetEatingSpeed(), g.FoodEaten))
+		boostStr = "  |  🚀 BOOST!"
 	}
+	r.buffer.WriteString(fmt.Sprintf("  Score: %d  |  AI Score: %d  |  Time Left: %ds  |  吃豆速度: %.2f 个/秒  |  已吃: %d 个%s\n",
+		g.Score, g.AIScore, g.GetTimeRemaining(), g.GetEatingSpeed(), g.FoodEaten, boostStr))
 
 	// Show congratulatory message above the game board (always reserve the line)
 	if msg := g.GetMessage(); msg != "" {
@@ -156,6 +166,10 @@ func (r *TerminalRenderer) Render(g *game.Game, boosting bool) {
 					r.buffer.WriteString(config.CharBody)
 				case cellCrash:
 					r.buffer.WriteString(config.CharCrash)
+				case cellAIHead:
+					r.buffer.WriteString("🤖")
+				case cellAIBody:
+					r.buffer.WriteString("🤖") // Simple robot icon for AI body
 				}
 			}
 		}

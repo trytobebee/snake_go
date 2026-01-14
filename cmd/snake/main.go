@@ -43,6 +43,7 @@ func main() {
 		lastDirKeyTime      time.Time
 		lastDirKeyDir       game.Point
 		consecutiveKeyCount = 0
+		aiTickCount         = 0
 	)
 
 	// Check if boost should be triggered
@@ -132,6 +133,20 @@ func main() {
 				tickCount = 0
 				if !g.GameOver && !g.Paused {
 					g.Update()
+				}
+				render.Render(g, boosting)
+			}
+
+			// AI Tick
+			aiTickCount++
+			aiTicksNeeded := 13
+			if g.AIBoosting {
+				aiTicksNeeded = 4
+			}
+			if aiTickCount >= aiTicksNeeded {
+				aiTickCount = 0
+				if !g.GameOver && !g.Paused {
+					g.UpdateAISnake()
 				}
 				render.Render(g, boosting)
 			}

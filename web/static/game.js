@@ -49,10 +49,97 @@ class SoundManager {
         this.playTone(50, 'square', 0.8, 0.1);
     }
 
+    playWin() {
+        if (!this.enabled || !this.ctx) return;
+        // Major arpeggio for celebration
+        const now = this.ctx.currentTime;
+        const freqs = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+        freqs.forEach((f, i) => {
+            const osc = this.ctx.createOscillator();
+            const gain = this.ctx.createGain();
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(f, now + i * 0.1);
+            gain.gain.setValueAtTime(0.1, now + i * 0.1);
+            gain.gain.exponentialRampToValueAtTime(0.0001, now + i * 0.1 + 0.5);
+            osc.connect(gain);
+            gain.connect(this.ctx.destination);
+            osc.start(now + i * 0.1);
+            osc.stop(now + i * 0.1 + 0.5);
+        });
+    }
+
     playBoost(active) {
         if (active) {
             this.playTone(200, 'sine', 0.1, 0.03);
         }
+    }
+
+    playFire(variant = 'cannon') {
+        if (!this.enabled || !this.ctx) return;
+
+        switch (variant) {
+            case 'cannon': // 选项 1: 重型大炮 (低沉有力)
+                this.playTone(150, 'square', 0.2, 0.2);
+                setTimeout(() => this.playTone(80, 'sine', 0.5, 0.15), 30);
+                break;
+
+            case 'laser': // 选项 2: 科幻激光 (带有音调下滑)
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(800, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(100, this.ctx.currentTime + 0.2);
+                gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + 0.2);
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.2);
+                break;
+
+            case 'pop': // 选项 3: 清脆爆破 (节奏感强)
+                this.playTone(400, 'sine', 0.05, 0.2);
+                setTimeout(() => this.playTone(200, 'square', 0.1, 0.1), 20);
+                break;
+
+            case 'pong': // 选项 4: 经典乒声 (复古电子)
+                this.playTone(523.25, 'sine', 0.15, 0.15); // C5
+                break;
+        }
+    }
+
+    playExplosion() {
+        if (!this.enabled || !this.ctx) return;
+        // Low frequency noise-like sound
+        this.playTone(100, 'sawtooth', 0.3, 0.2);
+        this.playTone(60, 'square', 0.4, 0.1);
+        // Add a bit of "crackly" high-frequency noise
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(1000, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(10, this.ctx.currentTime + 0.15);
+        gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, this.ctx.currentTime + 0.15);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.15);
+    }
+
+    playAIStun() {
+        if (!this.enabled || !this.ctx) return;
+        // Metallic "clink" sound
+        this.playTone(1200, 'sine', 0.1, 0.1);
+        setTimeout(() => this.playTone(800, 'sine', 0.15, 0.05), 50);
+        // Add a low buzz
+        this.playTone(120, 'square', 0.5, 0.1);
+    }
+
+    playAIConsume() {
+        if (!this.enabled || !this.ctx) return;
+        // Lower, duller "crunch" to distinguish from player
+        this.playTone(220, 'triangle', 0.2, 0.08);
     }
 
     toggle() {
@@ -73,6 +160,7 @@ class SnakeGameClient {
         this.cellSize = 20;
         this.boardWidth = 25;
         this.boardHeight = 25;
+        this.gameDuration = 30;
 
         this.canvas.width = this.boardWidth * this.cellSize;
         this.canvas.height = this.boardHeight * this.cellSize;
@@ -91,11 +179,15 @@ class SnakeGameClient {
         this.bestScoreEl = document.getElementById('bestScore');
         this.speedEl = document.getElementById('speed');
         this.eatenEl = document.getElementById('eaten');
+        this.aiScoreEl = document.getElementById('aiScore');
         this.boostIndicator = document.getElementById('boostIndicator');
         this.gameOverlay = document.getElementById('gameOverlay');
         this.overlayTitle = document.getElementById('overlayTitle');
         this.overlayMessage = document.getElementById('overlayMessage');
         this.connectionStatus = document.getElementById('connectionStatus');
+        this.timeLeftEl = document.getElementById('timeLeft');
+        this.aiStatEl = document.querySelector('.ai-stat');
+        this.timerEl = document.querySelector('.timer');
 
         // High score persistence with safety check
         this.bestScore = 0;
@@ -114,6 +206,7 @@ class SnakeGameClient {
         this.setupMobileControls();
         this.setupDifficulty();
         this.setupAutoPlay();
+        this.setupMode();
 
         // Message state for Canvas
         this.currentMessage = '';
@@ -124,6 +217,14 @@ class SnakeGameClient {
         this.lastGameOver = false;
         this.previousScore = 0;
         this.previousEaten = 0;
+        this.previousAIScore = 0;
+        this.lastAIStunned = false;
+        this.fireSoundStyle = 'cannon'; // 默认声音选项
+        this.explosions = []; // Active explosion animations
+        this.lastFireTime = 0;
+        this.fireCooldown = 300;
+        this.confetti = []; // Celebration particles
+        this.floatingScores = []; // Floating "+10" score texts
 
         // Start animation loop once
         this.startAnimationLoop();
@@ -138,6 +239,17 @@ class SnakeGameClient {
                 // Ignore vibration errors as they are non-critical
             }
         }
+    }
+
+    fire() {
+        const now = Date.now();
+        if (now - this.lastFireTime < this.fireCooldown) return;
+
+        this.ws.send(JSON.stringify({ action: 'fire' }));
+        // 可以在这里切换选项: 'cannon', 'laser', 'pop', 'pong'
+        this.sounds.playFire(this.fireSoundStyle || 'cannon');
+        this.triggerHaptic(20);
+        this.lastFireTime = now;
     }
 
     startAnimationLoop() {
@@ -202,6 +314,14 @@ class SnakeGameClient {
             btn.addEventListener('mouseleave', endAction);
         });
 
+        // Fire button
+        const fireBtn = document.getElementById('btn-fire');
+        if (fireBtn) {
+            fireBtn.addEventListener('click', () => {
+                this.fire();
+            });
+        }
+
         // Restart support via overlay tap/touch
         const handleStartRestart = () => {
             if (this.gameState && this.gameState.gameOver) {
@@ -232,11 +352,24 @@ class SnakeGameClient {
         };
 
         this.ws.onmessage = (event) => {
-            const newState = JSON.parse(event.data);
-            // Only update UI if state changed enough or periodically
-            this.gameState = newState;
-            this.updateUI();
-            // REMOVED: this.render() is now called by the animation loop
+            const msg = JSON.parse(event.data);
+
+            if (msg.type === 'config') {
+                this.handleConfig(msg.config);
+                return;
+            }
+
+            if (msg.type === 'state') {
+                const newState = msg.state;
+                // DEBUG: Check if AI fields are present
+                if (newState.aiSnake && newState.aiSnake.length > 0 && !window.aiDebugLogged) {
+                    console.log("✅ AI Snake data received:", newState.aiSnake);
+                    window.aiDebugLogged = true;
+                }
+
+                this.gameState = newState;
+                this.updateUI();
+            }
         };
 
         this.ws.onerror = (error) => {
@@ -249,6 +382,19 @@ class SnakeGameClient {
             this.updateConnectionStatus('disconnected');
             setTimeout(() => this.setupWebSocket(), 3000);
         };
+    }
+
+    handleConfig(config) {
+        if (!config) return;
+        this.boardWidth = config.width;
+        this.boardHeight = config.height;
+        this.gameDuration = config.gameDuration;
+        this.fireCooldown = config.fireballCooldown || 300;
+
+        this.canvas.width = this.boardWidth * this.cellSize;
+        this.canvas.height = this.boardHeight * this.cellSize;
+
+        console.log(`⚙️ Config synced: ${this.boardWidth}x${this.boardHeight}, ${this.gameDuration}s, Fire: ${this.fireCooldown}ms`);
     }
 
     setupKeyboard() {
@@ -267,6 +413,10 @@ class SnakeGameClient {
             else if (key === 'r') action = 'restart';
             else if (key === 'q') action = 'quit';
             else if (key === 'a') action = 'auto'; // 'a' is for auto-play
+            else if (key === 'f' || key === 'enter') {
+                this.fire();
+                return;
+            }
 
             if (action) {
                 e.preventDefault();
@@ -313,6 +463,25 @@ class SnakeGameClient {
         }
     }
 
+    setupMode() {
+        const battleBtn = document.getElementById('mode-battle');
+        const zenBtn = document.getElementById('mode-zen');
+        if (!battleBtn || !zenBtn) return;
+
+        const setMode = (mode) => {
+            if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                this.ws.send(JSON.stringify({ action: `mode_${mode}` }));
+                battleBtn.classList.toggle('active', mode === 'battle');
+                zenBtn.classList.toggle('active', mode === 'zen');
+                this.triggerHaptic(30);
+                this.showTempMessage(`${mode.charAt(0).toUpperCase() + mode.slice(1)} Mode Activated`);
+            }
+        };
+
+        battleBtn.onclick = () => setMode('battle');
+        zenBtn.onclick = () => setMode('zen');
+    }
+
     showTempMessage(msg) {
         if (!msg) return;
         this.currentMessage = msg;
@@ -352,9 +521,69 @@ class SnakeGameClient {
         this.previousEaten = currentEaten;
         this.previousScore = currentScore;
 
+        const currentAIScore = this.gameState.aiScore || 0;
+        if (currentAIScore > this.previousAIScore) {
+            this.sounds.playAIConsume();
+        }
+        this.previousAIScore = currentAIScore;
+
+        if (this.gameState.aiStunned && !this.lastAIStunned) {
+            this.sounds.playAIStun();
+            this.triggerHaptic([30, 20, 30]);
+        }
+        this.lastAIStunned = this.gameState.aiStunned;
+
         this.scoreEl.textContent = currentScore;
+
+        // Mode-based UI visibility
+        if (this.gameState.mode === 'zen') {
+            this.aiStatEl.style.display = 'none';
+            this.timerEl.style.display = 'none';
+        } else {
+            this.aiStatEl.style.display = 'flex';
+            this.timerEl.style.display = 'flex';
+            this.aiScoreEl.textContent = this.gameState.aiScore || 0;
+        }
+
         this.speedEl.textContent = (this.gameState.eatingSpeed || 0).toFixed(2);
         this.eatenEl.textContent = this.gameState.foodEaten || 0;
+
+        const timeRemaining = this.gameState.timeRemaining !== undefined ? this.gameState.timeRemaining : this.gameDuration;
+        this.timeLeftEl.textContent = timeRemaining;
+
+        // Visual warning for low time
+        if (timeRemaining <= 10) {
+            this.timeLeftEl.parentElement.classList.add('low-time');
+        } else {
+            this.timeLeftEl.parentElement.classList.remove('low-time');
+        }
+
+        // 1.0 Handle score events (floating bubbles)
+        if (this.gameState.scoreEvents && this.gameState.scoreEvents.length > 0) {
+            this.gameState.scoreEvents.forEach(ev => {
+                this.floatingScores.push({
+                    x: ev.pos.x * this.cellSize + this.cellSize / 2,
+                    y: ev.pos.y * this.cellSize,
+                    text: ev.label,
+                    life: 1.0,
+                    color: ev.label.includes('HEADSHOT') ? '#f6e05e' : (ev.label.includes('HIT') ? '#fc8181' : '#63b3ed')
+                });
+            });
+        }
+
+        // 1.1 Handle hit points (fireball collisions)
+        if (this.gameState.hitPoints && this.gameState.hitPoints.length > 0) {
+            this.gameState.hitPoints.forEach(hp => {
+                this.explosions.push({
+                    x: hp.x,
+                    y: hp.y,
+                    startTime: Date.now(),
+                    duration: 500 // 0.5s animation
+                });
+            });
+            this.sounds.playExplosion();
+            this.triggerHaptic(30);
+        }
 
         // 2. High Score Logic
         if (currentScore > this.bestScore) {
@@ -373,7 +602,15 @@ class SnakeGameClient {
         // 3. Game Over Special Message
         if (this.gameState.gameOver && !this.lastGameOver) {
             this.triggerHaptic([100, 50, 100]); // Heavy vibration on crash
-            this.sounds.playCrash();
+
+            // Distinguish between crash and time-up (competition win)
+            if (this.gameState.winner) {
+                this.sounds.playWin(); // Celebratory sound
+                this.createConfetti(); // Boom! 🎊
+            } else {
+                this.sounds.playCrash(); // Sad sound for crash
+            }
+
             if (currentScore >= this.bestScore && currentScore > 0) {
                 this.showTempMessage("🎊 NEW HIGH SCORE! 🎊");
             }
@@ -428,7 +665,15 @@ class SnakeGameClient {
             this.showOverlay('🐍 READY?', msg);
         } else if (this.gameState.gameOver) {
             const msg = window.innerWidth <= 768 ? 'Tap to restart' : 'Press R to restart';
-            this.showOverlay('💀 GAME OVER!', msg);
+            let title = '💀 GAME OVER!';
+
+            if (this.gameState.winner) {
+                if (this.gameState.winner === 'player') title = '🏆 YOU WIN!';
+                else if (this.gameState.winner === 'ai') title = '🤖 AI WINS!';
+                else if (this.gameState.winner === 'draw') title = '🤝 DRAW!';
+            }
+
+            this.showOverlay(title, msg);
         } else if (this.gameState.paused) {
             const msg = window.innerWidth <= 768 ? 'Tap to resume' : 'Press P to continue';
             this.showOverlay('⏸️ PAUSED', msg);
@@ -460,6 +705,74 @@ class SnakeGameClient {
         }
     }
 
+    createConfetti() {
+        const colors = ['#f6e05e', '#f56565', '#4299e1', '#48bb78', '#ed64a6', '#9f7aea'];
+        for (let i = 0; i < 150; i++) {
+            this.confetti.push({
+                x: this.canvas.width / 2,
+                y: this.canvas.height / 2,
+                vx: (Math.random() - 0.5) * 15,
+                vy: (Math.random() - 0.7) * 15,
+                color: colors[Math.floor(Math.random() * colors.length)],
+                size: Math.random() * 6 + 2,
+                life: 1.0,
+                decay: Math.random() * 0.02 + 0.01
+            });
+        }
+    }
+
+    drawConfetti() {
+        this.confetti = this.confetti.filter(p => p.life > 0);
+        this.confetti.forEach(p => {
+            this.ctx.globalAlpha = p.life;
+            this.ctx.fillStyle = p.color;
+            this.ctx.beginPath();
+            this.ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            this.ctx.fill();
+
+            p.x += p.vx;
+            p.y += p.vy;
+            p.vy += 0.2; // Gravity
+            p.life -= p.decay;
+        });
+        this.ctx.globalAlpha = 1.0;
+    }
+
+    drawFloatingScores() {
+        this.floatingScores = this.floatingScores.filter(s => s.life > 0);
+        this.floatingScores.forEach(s => {
+            this.ctx.globalAlpha = s.life;
+
+            // 1. Minimal Pill Shape
+            const paddingH = 8;
+            const paddingV = 4;
+            this.ctx.font = 'bold 13px Inter, sans-serif';
+            const textWidth = this.ctx.measureText(s.text).width;
+
+            // Subtle semi-transparent dark-ish background
+            this.ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+            const x = s.x - (textWidth / 2) - paddingH;
+            const y = s.y - 10 - paddingV;
+            const w = textWidth + (paddingH * 2);
+            const h = 14 + (paddingV * 2);
+
+            this.ctx.beginPath();
+            this.ctx.roundRect(x, y, w, h, 10);
+            this.ctx.fill();
+            this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+            this.ctx.stroke();
+
+            // 2. Clear Text
+            this.ctx.fillStyle = s.color;
+            this.ctx.textAlign = 'center';
+            this.ctx.fillText(s.text, s.x, s.y);
+
+            s.y -= 0.8; // Gentle float
+            s.life -= 0.015; // Slower fade for better readability
+        });
+        this.ctx.globalAlpha = 1.0;
+    }
+
     render() {
         // Clear canvas
         this.ctx.fillStyle = '#1a1a2e';
@@ -483,6 +796,19 @@ class SnakeGameClient {
         for (let y = 0; y < this.boardHeight; y++) {
             this.drawCell(0, y);
             this.drawCell(this.boardWidth - 1, y);
+        }
+
+        // Draw obstacles (stones)
+        if (this.gameState.obstacles) {
+            this.ctx.fillStyle = '#cbd5e0'; // Brighter metallic slate
+            this.ctx.shadowBlur = 8;
+            this.ctx.shadowColor = 'rgba(203, 213, 224, 0.5)';
+            this.gameState.obstacles.forEach(obs => {
+                obs.points.forEach(p => {
+                    this.drawCell(p.x, p.y);
+                });
+            });
+            this.ctx.shadowBlur = 0; // Reset shadow for other elements
         }
 
         // Draw foods
@@ -515,6 +841,68 @@ class SnakeGameClient {
             });
         }
 
+        // Draw AI snake
+        if (this.gameState.aiSnake) {
+            const isStunned = this.gameState.aiStunned;
+            this.gameState.aiSnake.forEach((segment, index) => {
+                if (index === 0) {
+                    // AI Head - Purple or Grey if stunned
+                    this.ctx.fillStyle = isStunned ? '#718096' : '#9f7aea';
+                    this.drawCell(segment.x, segment.y);
+                    // Add AI eyes (sensor-like)
+                    this.ctx.fillStyle = isStunned ? '#4a5568' : '#fff';
+                    const centerX = segment.x * this.cellSize + this.cellSize / 2;
+                    const centerY = segment.y * this.cellSize + this.cellSize / 2;
+                    this.ctx.beginPath();
+                    this.ctx.arc(centerX - 4, centerY - 4, 3, 0, Math.PI * 2);
+                    this.ctx.arc(centerX + 4, centerY - 4, 3, 0, Math.PI * 2);
+                    this.ctx.fill();
+
+                    if (isStunned) {
+                        // Stunned "X" eyes
+                        this.ctx.strokeStyle = '#fff';
+                        this.ctx.lineWidth = 1;
+                        this.ctx.beginPath();
+                        this.ctx.moveTo(centerX - 6, centerY - 6); this.ctx.lineTo(centerX - 2, centerY - 2);
+                        this.ctx.moveTo(centerX - 2, centerY - 6); this.ctx.lineTo(centerX - 6, centerY - 2);
+                        this.ctx.moveTo(centerX + 2, centerY - 6); this.ctx.lineTo(centerX + 6, centerY - 2);
+                        this.ctx.moveTo(centerX + 6, centerY - 6); this.ctx.lineTo(centerX + 2, centerY - 2);
+                        this.ctx.stroke();
+                    } else {
+                        this.ctx.fillStyle = '#e53e3e'; // Red dot in sensor
+                        this.ctx.beginPath();
+                        this.ctx.arc(centerX - 4, centerY - 4, 1, 0, Math.PI * 2);
+                        this.ctx.arc(centerX + 4, centerY - 4, 1, 0, Math.PI * 2);
+                        this.ctx.fill();
+                    }
+                } else {
+                    // AI Body - Lighter Purple or Grey
+                    this.ctx.fillStyle = isStunned ? '#a0aec0' : '#b794f4';
+                    this.drawCell(segment.x, segment.y);
+                }
+            });
+        }
+
+        // Draw fireballs
+        if (this.gameState.fireballs) {
+            this.gameState.fireballs.forEach(fb => {
+                this.drawFireball(fb);
+            });
+        }
+
+        // Draw explosions
+        const now = Date.now();
+        this.explosions = this.explosions.filter(exp => now - exp.startTime < exp.duration);
+        this.explosions.forEach(exp => {
+            this.drawExplosion(exp);
+        });
+
+        // Draw celebration confetti
+        this.drawConfetti();
+
+        // Draw floating scores
+        this.drawFloatingScores();
+
         if (this.gameState.gameOver && this.gameState.crashPoint) {
             this.ctx.font = `${this.cellSize}px sans-serif`;
             this.ctx.textAlign = 'center';
@@ -527,6 +915,50 @@ class SnakeGameClient {
 
         // --- Render Canvas Message ---
         this.drawCanvasMessage();
+    }
+
+    drawExplosion(exp) {
+        const centerX = exp.x * this.cellSize + this.cellSize / 2;
+        const centerY = exp.y * this.cellSize + this.cellSize / 2;
+        const elapsed = Date.now() - exp.startTime;
+        const progress = elapsed / exp.duration;
+
+        this.ctx.save();
+
+        // Expansion effect
+        const radius = (this.cellSize * 1.5) * progress;
+        const alpha = 1 - progress;
+
+        // Draw a few overlapping circles/particles
+        this.ctx.globalAlpha = alpha;
+
+        // Main blast
+        const grad = this.ctx.createRadialGradient(centerX, centerY, 0, centerX, centerY, radius);
+        grad.addColorStop(0, '#fff');
+        grad.addColorStop(0.3, '#ff0');
+        grad.addColorStop(0.7, '#f40');
+        grad.addColorStop(1, 'transparent');
+
+        this.ctx.fillStyle = grad;
+        this.ctx.beginPath();
+        this.ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+        this.ctx.fill();
+
+        // Particles
+        for (let i = 0; i < 8; i++) {
+            const angle = (i / 8) * Math.PI * 2 + progress * 2;
+            const dist = radius * 1.2;
+            const px = centerX + Math.cos(angle) * dist;
+            const py = centerY + Math.sin(angle) * dist;
+            const pSize = (this.cellSize / 4) * (1 - progress);
+
+            this.ctx.fillStyle = '#ff4d00';
+            this.ctx.beginPath();
+            this.ctx.arc(px, py, pSize, 0, Math.PI * 2);
+            this.ctx.fill();
+        }
+
+        this.ctx.restore();
     }
 
     drawCanvasMessage() {
@@ -652,6 +1084,31 @@ class SnakeGameClient {
             this.ctx.shadowColor = '#fff';
             this.ctx.stroke();
         }
+        this.ctx.restore();
+    }
+
+    drawFireball(fb) {
+        const centerX = fb.pos.x * this.cellSize + this.cellSize / 2;
+        const centerY = fb.pos.y * this.cellSize + this.cellSize / 2;
+
+        this.ctx.save();
+        // 1. External Glow
+        this.ctx.shadowBlur = 15;
+        this.ctx.shadowColor = '#ff4d00';
+
+        // 2. Main Body (Orange/Red)
+        this.ctx.fillStyle = '#ff6600';
+        this.ctx.beginPath();
+        this.ctx.arc(centerX, centerY, this.cellSize / 2.5, 0, Math.PI * 2);
+        this.ctx.fill();
+
+        // 3. Inner Core (Yellow/White)
+        this.ctx.shadowBlur = 4;
+        this.ctx.fillStyle = '#ffcc00';
+        this.ctx.beginPath();
+        this.ctx.arc(centerX, centerY, this.cellSize / 5, 0, Math.PI * 2);
+        this.ctx.fill();
+
         this.ctx.restore();
     }
 }

@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>🐍 Snake Game - Web Version</title>
-    <link rel="stylesheet" href="style.css?v=1.1">
+    <link rel="stylesheet" href="style.css?v=2.0">
 </head>
 
 <body>
@@ -26,6 +26,10 @@
                 <span class="stat-label">Score</span>
                 <span class="stat-value" id="score">0</span>
             </div>
+            <div class="stat-item ai-stat">
+                <span class="stat-label">AI Score</span>
+                <span class="stat-value" id="aiScore">0</span>
+            </div>
             <div class="stat-item">
                 <span class="stat-label">Speed</span>
                 <span class="stat-value" id="speed">0.00</span>
@@ -35,9 +39,23 @@
                 <span class="stat-label">Eaten</span>
                 <span class="stat-value" id="eaten">0</span>
             </div>
+            <div class="stat-item highlight timer">
+                <span class="stat-label">Time Left</span>
+                <span class="stat-value" id="timeLeft">30</span>
+                <span class="stat-unit">s</span>
+            </div>
             <div class="stat-item boost-indicator" id="boostIndicator">
                 <span class="boost-icon">🚀</span>
                 <span class="boost-text">BOOST!</span>
+            </div>
+        </div>
+
+        <!-- Mode Selector -->
+        <div class="mode-panel">
+            <span class="panel-label">Game Mode:</span>
+            <div class="mode-options">
+                <button class="mode-btn active" id="mode-battle">⚔️ Battle</button>
+                <button class="mode-btn" id="mode-zen">🧘 Zen</button>
             </div>
         </div>
 
@@ -69,6 +87,7 @@
                 <div class="control-row">
                     <button class="mobile-btn" id="btn-left">◀</button>
                     <button class="mobile-btn secondary" id="btn-pause">⏸</button>
+                    <button class="mobile-btn fire" id="btn-fire">🔥</button>
                     <button class="mobile-btn" id="btn-right">▶</button>
                 </div>
                 <div class="control-row">
@@ -98,6 +117,10 @@
                 <div class="control-item">
                     <kbd>A</kbd>
                     <span>Auto-Play</span>
+                </div>
+                <div class="control-item">
+                    <kbd>F</kbd> / <kbd>Enter</kbd>
+                    <span>Fire! 🔥</span>
                 </div>
                 <div class="control-item">
                     <span class="tip">💡 Hold direction key for 🚀 BOOST!</span>
@@ -139,7 +162,7 @@
         </div>
     </div>
 
-    <script src="game.js"></script>
+    <script src="game.js?v=AI_FIX"></script>
 </body>
 
 </html>

@@ -1,23 +1,52 @@
 package game
 
 import (
+	"math/rand"
+
 	"github.com/trytobebee/snake_go/pkg/config"
 )
 
-// UpdateAI decides the next move for the snake when in AutoPlay mode
+// UpdateAI decides the next move for the player snake when in AutoPlay mode
 func (g *Game) UpdateAI() {
 	if !g.AutoPlay || g.GameOver || g.Paused {
 		return
 	}
 
-	head := g.Snake[0]
+	newDir, boosting := g.CalculateBestMove(g.Snake, g.LastMoveDir)
+	g.Boosting = boosting
+	g.SetDirection(newDir)
+
+	// Fireball logic for player AI
+	g.handleAIFire(g.Snake[0], g.Direction)
+}
+
+// UpdateCompetitorAI decides the next move for the AI competitor
+func (g *Game) UpdateCompetitorAI() {
+	if g.GameOver || g.Paused {
+		return
+	}
+
+	newDir, boosting := g.CalculateBestMove(g.AISnake, g.AILastDir)
+	g.AIBoosting = boosting
+
+	// Set AI direction (bypass SetDirection validation which is for player)
+	if newDir.X != 0 || newDir.Y != 0 {
+		g.AIDirection = newDir
+	}
+
+	// Fireball logic for AI competitor
+	// (AI competitor doesn't shoot fireballs yet to keep it simple, or we can add it)
+}
+
+// CalculateBestMove computes the best next move for a given snake
+func (g *Game) CalculateBestMove(snake []Point, lastMoveDir Point) (Point, bool) {
+	if len(snake) == 0 {
+		return Point{X: 1, Y: 0}, false
+	}
+
+	head := snake[0]
 	var target Food
 	foundFood := false
-
-	// Determine current difficulty from GameServer context
-	// Since UpdateAI is called from Game.Update, we need the interval
-	// In the web version, the server manages the tick.
-	// We'll use "mid" as a stable assumption for internal AI calculation
 	currentDiff := "mid"
 
 	// Find best target based on (Score / Distance) and (Time Check)
@@ -32,19 +61,17 @@ func (g *Game) UpdateAI() {
 
 		remainingSec := food.GetRemainingSeconds(g.GetTotalPausedTime())
 
-		// Time estimation: Use explicit states for estimation to avoid flickering
+		// Time estimation
 		normalInterval := g.GetMoveIntervalExt(currentDiff, false)
 		timeNeededNormal := float64(dist) * normalInterval.Seconds()
 
 		boostInterval := g.GetMoveIntervalExt(currentDiff, true)
 		timeNeededBoost := float64(dist) * boostInterval.Seconds()
 
-		// If unreachable even with boost, skip this food (unless it's the only one)
 		if timeNeededBoost > float64(remainingSec) && len(g.Foods) > 1 {
 			continue
 		}
 
-		// Calculate utility
 		totalScore := food.GetTotalScore(config.Width, config.Height)
 		utility := float64(totalScore) / dist
 
@@ -52,39 +79,33 @@ func (g *Game) UpdateAI() {
 			maxUtility = utility
 			target = food
 			foundFood = true
-
-			// If normal speed is too slow, we need to boost
-			if timeNeededNormal > float64(remainingSec) {
-				shouldBoost = true
-			} else {
-				shouldBoost = false
-			}
+			shouldBoost = timeNeededNormal > float64(remainingSec)
 		}
 	}
 
 	if !foundFood {
-		g.Boosting = false
-		return
+		return lastMoveDir, false
 	}
 
-	// Apply boost decision
-	g.Boosting = shouldBoost
-
-	// Pathfinding logic...
+	// Pathfinding logic
 	possibleDirs := []Point{
 		{X: 0, Y: -1}, {X: 0, Y: 1}, {X: -1, Y: 0}, {X: 1, Y: 0},
 	}
+	// Shuffle dirs to avoid deterministic behavior when scores are equal
+	rand.Shuffle(len(possibleDirs), func(i, j int) {
+		possibleDirs[i], possibleDirs[j] = possibleDirs[j], possibleDirs[i]
+	})
 
-	bestDir := g.Direction
+	bestDir := lastMoveDir
 	bestScore := -1000000.0
-	snakeLen := len(g.Snake)
+	snakeLen := len(snake)
 
 	for _, dir := range possibleDirs {
 		// Prevent 180-degree turns
-		if dir.X != 0 && g.LastMoveDir.X == -dir.X {
+		if dir.X != 0 && lastMoveDir.X == -dir.X {
 			continue
 		}
-		if dir.Y != 0 && g.LastMoveDir.Y == -dir.Y {
+		if dir.Y != 0 && lastMoveDir.Y == -dir.Y {
 			continue
 		}
 
@@ -93,34 +114,24 @@ func (g *Game) UpdateAI() {
 			continue
 		}
 
-		// Calculate Space Rating (Flood Fill)
-		// This is the most important "smart" part: how much room do we have?
 		reachableSpace := g.countReachableSpace(nextPos)
-
-		// Base score from space
 		score := float64(reachableSpace) * 50.0
 
-		// Trap detection: If space is smaller than our body, it's a death trap
 		if reachableSpace < snakeLen {
-			score -= 5000.0 // Heavy penalty for suicide moves
+			score -= 5000.0
 		}
 
-		// Reward moving towards food only if it's safe-ish
 		distToFood := float64(abs(target.Pos.X-nextPos.X) + abs(target.Pos.Y-nextPos.Y))
 		score += (100.0 - distToFood) * 2.0
 
-		// Huge bonus for eating
 		if nextPos == target.Pos {
 			score += 1000.0
 		}
 
-		// Survival fallback: If we are getting cramped, try to move toward tail
-		// As snake grows, we should be less picky, but ensure we have enough to survive
-		survivalThreshold := snakeLen + 20
+		survivalThreshold := snakeLen + 10
 		if reachableSpace < survivalThreshold {
-			tail := g.Snake[snakeLen-1]
+			tail := snake[snakeLen-1]
 			distToTail := float64(abs(tail.X-nextPos.X) + abs(tail.Y-nextPos.Y))
-			// Only follow tail if space is actually getting tight
 			urgency := float64(survivalThreshold - reachableSpace)
 			score += (100.0 - distToTail) * urgency * 0.5
 		}
@@ -131,7 +142,45 @@ func (g *Game) UpdateAI() {
 		}
 	}
 
-	g.SetDirection(bestDir)
+	return bestDir, shouldBoost
+}
+
+func (g *Game) handleAIFire(head Point, dir Point) {
+	for dist := 1; dist <= 5; dist++ {
+		lookAhead := Point{X: head.X + dir.X*dist, Y: head.Y + dir.Y*dist}
+		if lookAhead.X <= 0 || lookAhead.X >= config.Width-1 || lookAhead.Y <= 0 || lookAhead.Y >= config.Height-1 {
+			break
+		}
+
+		isBlocked := false
+		for _, obs := range g.Obstacles {
+			for _, op := range obs.Points {
+				if op == lookAhead {
+					isBlocked = true
+					break
+				}
+			}
+			if isBlocked {
+				break
+			}
+		}
+
+		if isBlocked {
+			g.Fire()
+			break
+		}
+
+		isFood := false
+		for _, f := range g.Foods {
+			if f.Pos == lookAhead {
+				isFood = true
+				break
+			}
+		}
+		if isFood {
+			break
+		}
+	}
 }
 
 // countReachableSpace uses a simple flood fill to count safe tiles
@@ -146,14 +195,15 @@ func (g *Game) countReachableSpace(start Point) int {
 	for _, p := range g.Snake {
 		occupied[p] = true
 	}
+	for _, p := range g.AISnake {
+		occupied[p] = true
+	}
 
 	for len(queue) > 0 {
 		curr := queue[0]
 		queue = queue[1:]
 		count++
 
-		// Max early exit for performance.
-		// For 25x25 board (625), we want to count enough to know if we can fit
 		if count > 450 {
 			return count
 		}
@@ -162,13 +212,38 @@ func (g *Game) countReachableSpace(start Point) int {
 		for _, d := range dirs {
 			next := Point{curr.X + d.X, curr.Y + d.Y}
 
-			// Wall check
 			if next.X <= 0 || next.X >= config.Width-1 || next.Y <= 0 || next.Y >= config.Height-1 {
 				continue
 			}
 
-			// Body check (simple: ignore tail might move, but safer to assume occupied)
-			if occupied[next] && next != g.Snake[len(g.Snake)-1] {
+			if occupied[next] {
+				// Simple check: ignore tail positions if they might move
+				isTail := false
+				if len(g.Snake) > 0 && next == g.Snake[len(g.Snake)-1] {
+					isTail = true
+				}
+				if len(g.AISnake) > 0 && next == g.AISnake[len(g.AISnake)-1] {
+					isTail = true
+				}
+				if !isTail {
+					continue
+				}
+			}
+
+			// Obstacle check
+			isObs := false
+			for _, obs := range g.Obstacles {
+				for _, op := range obs.Points {
+					if op == next {
+						isObs = true
+						break
+					}
+				}
+				if isObs {
+					break
+				}
+			}
+			if isObs {
 				continue
 			}
 
@@ -181,33 +256,32 @@ func (g *Game) countReachableSpace(start Point) int {
 	return count
 }
 
-// isSafe checks if a position is not a wall or snake body
+// isSafe checks if a position is not a wall, snake body or obstacle
 func (g *Game) isSafe(p Point) bool {
-	// Wall check
 	if p.X <= 0 || p.X >= config.Width-1 || p.Y <= 0 || p.Y >= config.Height-1 {
 		return false
 	}
 
-	// Snake body check (excluding tail if not eating, but simple check is safer for demo)
-	for _, segment := range g.Snake {
-		if p == segment {
+	for _, s := range g.Snake {
+		if s == p {
+			return false
+		}
+	}
+	for _, s := range g.AISnake {
+		if s == p {
 			return false
 		}
 	}
 
-	return true
-}
-
-// countFreeNeighbors counts how many adjacent cells are safe
-func (g *Game) countFreeNeighbors(p Point) int {
-	count := 0
-	dirs := []Point{{0, 1}, {0, -1}, {1, 0}, {-1, 0}}
-	for _, d := range dirs {
-		if g.isSafe(Point{p.X + d.X, p.Y + d.Y}) {
-			count++
+	for _, obs := range g.Obstacles {
+		for _, op := range obs.Points {
+			if p == op {
+				return false
+			}
 		}
 	}
-	return count
+
+	return true
 }
 
 func abs(x int) int {

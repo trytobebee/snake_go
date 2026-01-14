@@ -34,70 +34,41 @@ type GameServer struct {
 	lastDirKeyTime      time.Time
 	lastDirKeyDir       game.Point
 	consecutiveKeyCount int
+	fireballTickCount   int
+	aiTickCount         int
+	currentMode         string
+}
+
+type ServerMessage struct {
+	Type   string           `json:"type"`
+	Config *game.GameConfig `json:"config,omitempty"`
+	State  *game.GameState  `json:"state,omitempty"`
 }
 
 type ClientMessage struct {
 	Action string `json:"action"`
 }
 
-type GameState struct {
-	Snake       []game.Point `json:"snake"`
-	Foods       []FoodInfo   `json:"foods"`
-	Score       int          `json:"score"`
-	FoodEaten   int          `json:"foodEaten"`
-	EatingSpeed float64      `json:"eatingSpeed"`
-	Started     bool         `json:"started"`
-	GameOver    bool         `json:"gameOver"`
-	Paused      bool         `json:"paused"`
-	Boosting    bool         `json:"boosting"`
-	AutoPlay    bool         `json:"autoPlay"`
-	Difficulty  string       `json:"difficulty"`
-	Message     string       `json:"message,omitempty"`
-	CrashPoint  *game.Point  `json:"crashPoint,omitempty"`
-}
-
-type FoodInfo struct {
-	Pos              game.Point `json:"pos"`
-	FoodType         int        `json:"foodType"`
-	RemainingSeconds int        `json:"remainingSeconds"`
-}
+// FoodInfo moved to pkg/game
+// GameState moved to pkg/game
 
 func NewGameServer() *GameServer {
-	return &GameServer{
-		game:       game.NewGame(),
-		ticker:     time.NewTicker(config.BaseTick),
-		difficulty: "mid",
+	gs := &GameServer{
+		game:        game.NewGame(),
+		ticker:      time.NewTicker(config.BaseTick),
+		difficulty:  "mid",
+		currentMode: "battle",
 	}
+	gs.game.TimerStarted = false
+	return gs
 }
 
-func (gs *GameServer) getGameState() GameState {
-	foods := make([]FoodInfo, len(gs.game.Foods))
-	for i, f := range gs.game.Foods {
-		foods[i] = FoodInfo{
-			Pos:              f.Pos,
-			FoodType:         int(f.FoodType),
-			RemainingSeconds: f.GetRemainingSeconds(gs.game.GetTotalPausedTime()),
-		}
-	}
+func (gs *GameServer) getGameState() game.GameState {
+	state := gs.game.GetGameStateSnapshot(gs.started, gs.boosting, gs.difficulty)
 
-	state := GameState{
-		Snake:       gs.game.Snake,
-		Foods:       foods,
-		Score:       gs.game.Score,
-		FoodEaten:   gs.game.FoodEaten,
-		EatingSpeed: gs.game.GetEatingSpeed(),
-		Started:     gs.started,
-		GameOver:    gs.game.GameOver,
-		Paused:      gs.game.Paused,
-		Boosting:    gs.game.Boosting || gs.boosting,
-		AutoPlay:    gs.game.AutoPlay,
-		Difficulty:  gs.difficulty,
-		Message:     gs.game.GetMessage(),
-	}
-
-	if gs.game.GameOver {
-		state.CrashPoint = &gs.game.CrashPoint
-	}
+	// Important: Clear events after they are captured for the current state update
+	// to prevent the client from creating duplicate floating bubbles.
+	gs.game.ScoreEvents = nil
 
 	return state
 }
@@ -124,6 +95,7 @@ func (gs *GameServer) handleAction(action string) {
 			if !gs.started {
 				gs.started = true
 				gs.tickCount = 0
+				gs.game.TimerStarted = true
 				gs.game.StartTime = time.Now()
 				gs.game.LastFoodSpawn = time.Now()
 				if len(gs.game.Foods) > 0 {
@@ -139,10 +111,22 @@ func (gs *GameServer) handleAction(action string) {
 	case "restart":
 		if gs.game.GameOver {
 			gs.game = game.NewGame()
+			gs.game.Mode = gs.currentMode
+			gs.game.TimerStarted = false
 			gs.started = false
 			gs.boosting = false
 			gs.tickCount = 0
 			gs.consecutiveKeyCount = 0
+		}
+	case "mode_zen":
+		gs.currentMode = "zen"
+		gs.game.Mode = "zen"
+		gs.game.AISnake = nil
+	case "mode_battle":
+		gs.currentMode = "battle"
+		gs.game.Mode = "battle"
+		if len(gs.game.AISnake) == 0 {
+			gs.game.AISnake = []game.Point{{X: config.Width - 2, Y: config.Height - 2}}
 		}
 	case "diff_low":
 		if !gs.started || gs.game.GameOver {
@@ -160,11 +144,16 @@ func (gs *GameServer) handleAction(action string) {
 		if !gs.game.GameOver {
 			gs.game.ToggleAutoPlay()
 		}
+	case "fire":
+		if !gs.game.GameOver && !gs.game.Paused {
+			gs.game.Fire()
+		}
 	}
 
 	if isDirection {
 		if !gs.started {
 			gs.started = true
+			gs.game.TimerStarted = true
 			gs.tickCount = 0
 			gs.game.StartTime = time.Now()
 			gs.game.LastFoodSpawn = time.Now()
@@ -246,6 +235,34 @@ func (gs *GameServer) update() {
 			gs.game.Update()
 		}
 	}
+
+	if gs.started && !gs.game.GameOver && gs.game.AIScore > 0 {
+		// Temporary debug log
+		// log.Printf("Debug: User Score: %d, AI Score: %d\n", gs.game.Score, gs.game.AIScore)
+	}
+
+	// Move AI snake independently
+	gs.aiTickCount++
+	aiTicksNeeded := 13 // Mid speed for AI
+	if gs.game.AIBoosting {
+		aiTicksNeeded = 4
+	}
+	if gs.aiTickCount >= aiTicksNeeded {
+		gs.aiTickCount = 0
+		if !gs.game.GameOver && !gs.game.Paused {
+			gs.game.UpdateAISnake()
+		}
+	}
+
+	// Update fireballs independently at FireballSpeed
+	gs.fireballTickCount++
+	fbTicks := int(config.FireballSpeed / config.BaseTick)
+	if gs.fireballTickCount >= fbTicks {
+		gs.fireballTickCount = 0
+		if !gs.game.GameOver && !gs.game.Paused {
+			gs.game.UpdateFireballs()
+		}
+	}
 }
 
 func handleWebSocket(w http.ResponseWriter, r *http.Request) {
@@ -289,8 +306,19 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return conn.WriteJSON(v)
 	}
 
+	// Send initial config
+	gameConfig := gs.game.GetGameConfig()
+	safeWriteJSON(ServerMessage{
+		Type:   "config",
+		Config: &gameConfig,
+	})
+
 	// Send initial state
-	safeWriteJSON(gs.getGameState())
+	initialState := gs.getGameState()
+	safeWriteJSON(ServerMessage{
+		Type:  "state",
+		State: &initialState,
+	})
 
 	// Input handling goroutine
 	go func() {
@@ -303,7 +331,11 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			}
 			gs.handleAction(msg.Action)
 			// Trigger immediate state update for UI responsiveness
-			safeWriteJSON(gs.getGameState())
+			state := gs.getGameState()
+			safeWriteJSON(ServerMessage{
+				Type:  "state",
+				State: &state,
+			})
 		}
 	}()
 
@@ -312,11 +344,16 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		gs.update()
 
 		state := gs.getGameState()
-		err := safeWriteJSON(state)
+		err := safeWriteJSON(ServerMessage{
+			Type:  "state",
+			State: &state,
+		})
 		if err != nil {
 			log.Println("Write error:", err)
 			return
 		}
+		// Clear one-shot effects after sending
+		gs.game.HitPoints = nil
 	}
 }
 

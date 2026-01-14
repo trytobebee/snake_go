@@ -1,6 +1,6 @@
-# 🐍 Snake Game (Go Terminal)
+# 🐍 Snake Game (Go)
 
-A terminal-based Snake game written in Go, featuring emoji rendering and cross-platform support.
+A modern Snake game written in Go, featuring both **Terminal** and **Web** versions with rich gameplay mechanics.
 
 ![Go Version](https://img.shields.io/badge/Go-1.19+-00ADD8?style=flat&logo=go)
 ![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey)
@@ -8,14 +8,19 @@ A terminal-based Snake game written in Go, featuring emoji rendering and cross-p
 
 ## ✨ Features
 
-- 🤖 **AI Auto-Play (Demo Mode)** with space-awareness (Flood Fill)
+- 🌐 **Dual Mode**: Terminal CLI and Web Browser versions
+- 🎮 **New Game Modes**: **Zen** (Infinite practice) and **Battle** (AI competition)
+- ✨ **Floating Score Effects**: Animated score bubbles with glass-morphic design
+- 🔥 **Fireball Combat System** - Shoot fireballs to destroy obstacles and stun AI
+- � **AI Competitive Snake** - Battle against an intelligent AI rival
+- � **Dynamic Sync Engine** - Deep client-server config synchronization
 - 🔊 **Dynamic Sound Effects** (Web Audio synthesized)
 - 📳 **Haptic Feedback** for mobile devices
-- 🚀 **Boost Mode** (Hold direction key)
-- 🍎 Multiple food types with different scores and expiry times
-- 📊 Real-time statistics (score, eating speed, food count)
-- 📦 Single binary, no runtime dependencies
-- 🌐 **Web & Terminal Support**
+- 🚀 **Boost Mode** - Hold direction key for 3x speed
+- 🍎 **Multi-Type Food System** with different scores and expiry times
+- 📊 **Real-time Statistics** (score, eating speed, food count)
+- 📱 **Mobile-Friendly** web interface with touch controls
+- 💾 **High Score Persistence** (localStorage for web)
 
 ## 📚 Documentation
 
@@ -32,10 +37,19 @@ Detailed documentation on features and architecture can be found in the [docs/](
   - [Code Structure](./docs/CODE_STRUCTURE.md)
 - **Optimization & Debugging**
   - [Performance Optimizations](./docs/PERFORMANCE.md)
-  - [Bugfix: Pause Timer Logic](./docs/BUGFIX_PAUSE_TIMER.md)
-  - [Bugfix: Screen Drift Fix](./docs/BUGFIX_SCREEN_DRIFT.md)
+  - [Config Synchronization Logic](./docs/SYNC_ENGINE.md)
+  - [Game Mode Design](./docs/GAME_MODES.md)
 
 ## 🎯 Game Features
+
+### New Game Modes 🎮
+- **🧘 Zen Mode**: No time limit, no AI opponent. Perfect for practicing controls, exploring the multi-food system, and enjoying a relaxed experience.
+- **⚔️ Battle Mode**: Compete against an AI snake within a 30-second time limit. Includes combat mechanics (stun AI with fireballs!).
+
+### Floating Score Feedback 📈
+- **Dynamic Bubbles**: Floating score labels pop up exactly where points are earned.
+- **Visual Design**: Sleek glass-morphic capsule design with smooth upward-floating and fading animations.
+- **Contextual Colors**: Blue for food, red for combat hits, and **gold** for critical AI headshots.
 
 ### Multi-Type Food System
 - 🔴 Red (40 points, 10s) - 15% spawn rate
@@ -44,7 +58,27 @@ Detailed documentation on features and architecture can be found in the [docs/](
 - 🟣 Purple (10 points, 20s) - 35% spawn rate
 
 ### Countdown Display
-Foods show a countdown timer in the last 5 seconds (🔴⁵ → 🔴¹)
+Foods show a visual countdown timer with pulsating animation in the last 5 seconds
+
+### Obstacle System 🪨
+- **Dynamic Spawning**: Obstacles appear randomly during gameplay
+- **Destructible**: Use fireballs to destroy obstacle blocks
+- **Temporary**: Obstacles expire after a set duration
+- **Strategic Challenge**: Navigate around or destroy them for bonus points
+
+### Fireball Combat System 🔥
+- **Shoot Projectiles**: Fire fireballs in your current direction
+- **Destroy Obstacles**: Earn +10 points for each block destroyed
+- **Cooldown**: 300ms between shots
+- **Fast Travel**: Fireballs move faster than the snake
+- **Smart Collision**: Fireballs pass through snake head but hit body/walls/obstacles
+- **Visual Effects**: Explosion animations on impact
+
+### Difficulty Levels
+- **Low**: Slower snake speed, easier gameplay
+- **Mid**: Moderate speed, balanced challenge
+- **High**: Fast-paced action for experienced players
+- Change difficulty before starting or after game over
 
 ### Boost Mechanism
 Hold the current direction key to trigger 3x speed boost 🚀
@@ -53,6 +87,7 @@ Hold the current direction key to trigger 3x speed boost 🚀
 - Current score
 - Eating speed (foods/second)
 - Total foods eaten
+- Best score (persisted)
 
 ## 🚀 Quick Start
 
@@ -202,11 +237,7 @@ Contributions welcome! Please feel free to submit issues and pull requests.
 
 ## 🎯 Future Enhancements
 
-- [ ] High score persistence
-- [ ] Difficulty levels
-- [ ] Power-ups (shield, time freeze, etc.)
-- [ ] Obstacles
-- [ ] Combo scoring system
-- [ ] Sound effects (optional)
-- [ ] Web-based renderer
-- [ ] Multiplayer mode
+- [ ] Boss battles or giant mode
+- [ ] Power-ups (shield, ghost mode, etc.)
+- [ ] Multiplayer mode (Real-time P2P)
+- [ ] Skins and customization

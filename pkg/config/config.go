@@ -4,14 +4,28 @@ import "time"
 
 // Game board dimensions
 const (
-	Width  = 25 // Reduced width for emoji double-width
-	Height = 25
+	Width        = 25 // Reduced width for emoji double-width
+	Height       = 25
+	GameDuration = 30 * time.Second
 )
 
 // Food spawn settings
 const (
 	FoodSpawnInterval = 5 * time.Second
 	MaxFoodsOnBoard   = 5 // Maximum concurrent foods on board
+)
+
+// Obstacle settings
+const (
+	ObstacleSpawnInterval = 10 * time.Second
+	ObstacleDuration      = 30 * time.Second
+	MaxObstacles          = 4
+)
+
+// Fireball settings
+const (
+	FireballSpeed    = 48 * time.Millisecond  // Time between fireball moves
+	FireballCooldown = 300 * time.Millisecond // Time between shots
 )
 
 // Speed and boost settings
