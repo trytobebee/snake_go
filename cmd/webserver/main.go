@@ -37,8 +37,16 @@ type GameServer struct {
 	fireballTickCount   int
 	aiTickCount         int
 	currentMode         string
+
+	// Recording info
+	stepID        int
+	firedThisStep bool
+	connID        string
 }
 
+// ... (ServerMessage, ClientMessage structs unchanged)
+
+// ... (ServerMessage, ClientMessage structs unchanged)
 type ServerMessage struct {
 	Type   string           `json:"type"`
 	Config *game.GameConfig `json:"config,omitempty"`
@@ -49,15 +57,13 @@ type ClientMessage struct {
 	Action string `json:"action"`
 }
 
-// FoodInfo moved to pkg/game
-// GameState moved to pkg/game
-
-func NewGameServer() *GameServer {
+func NewGameServer(connID string) *GameServer {
 	gs := &GameServer{
 		game:        game.NewGame(),
 		ticker:      time.NewTicker(config.BaseTick),
 		difficulty:  "mid",
 		currentMode: "battle",
+		connID:      connID,
 	}
 	gs.game.TimerStarted = false
 	return gs
@@ -71,6 +77,48 @@ func (gs *GameServer) getGameState() game.GameState {
 	gs.game.ScoreEvents = nil
 
 	return state
+}
+
+func (gs *GameServer) startRecording() {
+	if gs.game.Recorder != nil {
+		return // Already recording
+	}
+	sessionID := fmt.Sprintf("game_%d_conn_%s", time.Now().UnixNano(), gs.connID)
+	// Sanitize filename safe chars
+	recorder, err := game.NewRecorder(sessionID)
+	if err == nil {
+		gs.game.Recorder = recorder
+		gs.stepID = 0
+		log.Printf("🔴 Recording started: %s\n", sessionID)
+	} else {
+		log.Println("❌ Failed to start recording:", err)
+	}
+}
+
+func (gs *GameServer) stopRecording() {
+	if gs.game.Recorder != nil {
+		gs.game.Recorder.Close()
+		gs.game.Recorder = nil
+		log.Println("⏹️ Recording stopped")
+	}
+}
+
+func (gs *GameServer) checkBoostKey(inputDir game.Point) {
+	now := time.Now()
+
+	if inputDir == gs.lastDirKeyDir && time.Since(gs.lastDirKeyTime) < config.KeyRepeatWindow {
+		gs.consecutiveKeyCount++
+	} else {
+		gs.consecutiveKeyCount = 1
+	}
+
+	gs.lastDirKeyDir = inputDir
+	gs.lastDirKeyTime = now
+
+	if gs.consecutiveKeyCount >= config.BoostThreshold && inputDir == gs.game.Direction {
+		gs.boosting = true
+		gs.lastBoostKeyTime = now
+	}
 }
 
 func (gs *GameServer) handleAction(action string) {
@@ -102,13 +150,20 @@ func (gs *GameServer) handleAction(action string) {
 					gs.game.Foods[0].SpawnTime = time.Now()
 					gs.game.Foods[0].PausedTimeAtSpawn = gs.game.GetTotalPausedTime()
 				}
+				gs.startRecording()
 			} else {
 				gs.game.TogglePause()
 			}
 		}
 	case "start":
-		gs.started = true
+		if !gs.started {
+			gs.started = true
+			gs.startRecording()
+		}
 	case "restart":
+		// Force stop even if game wasn't over (shouldn't happen with current UI logic)
+		gs.stopRecording()
+
 		if gs.game.GameOver {
 			gs.game = game.NewGame()
 			gs.game.Mode = gs.currentMode
@@ -147,6 +202,7 @@ func (gs *GameServer) handleAction(action string) {
 	case "fire":
 		if !gs.game.GameOver && !gs.game.Paused {
 			gs.game.Fire()
+			gs.firedThisStep = true
 		}
 	case "toggleBerserker":
 		if !gs.game.GameOver {
@@ -164,6 +220,7 @@ func (gs *GameServer) handleAction(action string) {
 			if len(gs.game.Foods) > 0 {
 				gs.game.Foods[0].SpawnTime = time.Now()
 			}
+			gs.startRecording()
 		}
 		dirChanged := gs.game.SetDirection(inputDir)
 
@@ -180,23 +237,7 @@ func (gs *GameServer) handleAction(action string) {
 	}
 }
 
-func (gs *GameServer) checkBoostKey(inputDir game.Point) {
-	now := time.Now()
-
-	if inputDir == gs.lastDirKeyDir && time.Since(gs.lastDirKeyTime) < config.KeyRepeatWindow {
-		gs.consecutiveKeyCount++
-	} else {
-		gs.consecutiveKeyCount = 1
-	}
-
-	gs.lastDirKeyDir = inputDir
-	gs.lastDirKeyTime = now
-
-	if gs.consecutiveKeyCount >= config.BoostThreshold && inputDir == gs.game.Direction {
-		gs.boosting = true
-		gs.lastBoostKeyTime = now
-	}
-}
+// ... (checkBoostKey unchanged)
 
 func (gs *GameServer) update() {
 	// Sync manual boosting state to game if not in AutoPlay
@@ -214,35 +255,76 @@ func (gs *GameServer) update() {
 		return
 	}
 
+	// ... (ticks calculation unchanged)
 	ticksNeeded := 13 // Default Medium
 	boostTicks := 4
-
 	switch gs.difficulty {
 	case "low":
-		ticksNeeded = 18 // 288ms
-		boostTicks = 6   // 96ms
+		ticksNeeded = 18
+		boostTicks = 6
 	case "mid":
-		ticksNeeded = 13 // 208ms (approx 216ms)
-		boostTicks = 4   // 64ms
+		ticksNeeded = 13
+		boostTicks = 4
 	case "high":
-		ticksNeeded = 9 // 144ms
-		boostTicks = 3  // 48ms
+		ticksNeeded = 9
+		boostTicks = 3
 	}
-
 	if gs.game.Boosting {
 		ticksNeeded = boostTicks
 	}
+	// ...
 
 	if gs.tickCount >= ticksNeeded {
 		gs.tickCount = 0
 		if !gs.game.GameOver && !gs.game.Paused {
 			gs.game.Update()
+
+			// --- Recording Logic ---
+			if gs.game.Recorder != nil {
+				snapshot := gs.game.GetGameStateSnapshot(gs.started, gs.boosting, gs.difficulty)
+
+				// Reward Calculation
+				reward := float64(gs.game.Score - gs.game.LastScore)
+				if gs.game.GameOver && gs.game.Winner != "player" {
+					reward -= 100.0 // Death penalty
+				} else if !gs.game.GameOver {
+					reward += 0.1 // Survival bonus
+				}
+				gs.game.LastScore = gs.game.Score
+
+				// Capture Action
+				actionData := game.ActionData{
+					Direction: gs.game.LastMoveDir,
+					Boost:     gs.game.Boosting,
+					Fire:      gs.firedThisStep,
+				}
+				gs.firedThisStep = false // Reset for next step
+
+				rec := game.StepRecord{
+					StepID:    gs.stepID,
+					Timestamp: time.Now().UnixMilli(),
+					State:     snapshot,
+					Action:    actionData,
+					AIContext: gs.game.CurrentAIContext,
+					Reward:    reward,
+					Done:      gs.game.GameOver,
+				}
+				gs.game.Recorder.RecordStep(rec)
+				gs.stepID++
+
+				// Stop recording if game just ended
+				if gs.game.GameOver {
+					gs.stopRecording()
+				}
+			}
+			// -----------------------
 		}
 	}
 
+	// ... (AI and Fireball update unchanged)
+
 	if gs.started && !gs.game.GameOver && gs.game.AIScore > 0 {
 		// Temporary debug log
-		// log.Printf("Debug: User Score: %d, AI Score: %d\n", gs.game.Score, gs.game.AIScore)
 	}
 
 	// Move AI snake independently
@@ -288,10 +370,12 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Generate a short unique ID for this connection
+	connID := fmt.Sprintf("%d", time.Now().UnixNano()%10000)
+
 	// Double check if this IP is already connected
 	if _, loaded := activeIPs.LoadOrStore(ip, true); loaded {
 		log.Printf("Connection rejected: IP %s is already connected\n", ip)
-		// Optionally send a reason before closing, but simple close is safer
 		conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, "Already connected"))
 		return
 	}
@@ -299,8 +383,9 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	// Defer removal of IP from active list when connection closes
 	defer activeIPs.Delete(ip)
 
-	gs := NewGameServer()
+	gs := NewGameServer(connID)
 	defer gs.ticker.Stop()
+	defer gs.stopRecording() // Ensure recording stops on disconnect
 
 	// Mutex to protect concurrent writes to the WebSocket connection
 	var writeMu sync.Mutex
@@ -310,6 +395,8 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return conn.WriteJSON(v)
 	}
 
+	// ... (Rest of handleWebSocket unchanged: send config, state, loops)
+
 	// Send initial config
 	gameConfig := gs.game.GetGameConfig()
 	safeWriteJSON(ServerMessage{
@@ -317,7 +404,7 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		Config: &gameConfig,
 	})
 
-	// Send initial state
+	// ... (rest same)
 	initialState := gs.getGameState()
 	safeWriteJSON(ServerMessage{
 		Type:  "state",

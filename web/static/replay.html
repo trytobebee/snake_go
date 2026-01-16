@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Snake Replay</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="/static/style.css">
+    <style>
+        /* Replay specific overrides */
+        .controls-panel {
+            display: none;
+        }
+
+        .replay-controls {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px 20px;
+            border-radius: 20px;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .replay-btn {
+            background: none;
+            border: 1px solid #fff;
+            color: #fff;
+            padding: 5px 10px;
+            cursor: pointer;
+            border-radius: 5px;
+        }
+
+        .replay-btn:hover {
+            background: #fff;
+            color: #000;
+        }
+
+        .ai-intent {
+            font-weight: bold;
+            color: #f6e05e;
+            margin-left: 10px;
+        }
+
+        #replayInfo {
+            color: #ddd;
+            font-size: 14px;
+        }
+
+        .game-header h1 {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .back-link {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #fff;
+            text-decoration: none;
+            font-weight: bold;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 8px 16px;
+            border-radius: 20px;
+        }
+
+        .back-link:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+    </style>
+</head>
+
+<body>
+    <a href="/" class="back-link">← Back to List</a>
+
+    <!-- Replay Info Overlay -->
+    <div class="replay-controls">
+        <button class="replay-btn" id="btn-pause">Pause/Play</button>
+        <div id="replayInfo">Step: 0</div>
+        <div id="aiIntent" class="ai-intent">INTENT: -</div>
+    </div>
+
+    <!-- Container content similar to index.html -->
+    <div class="container">
+        <header class="game-header">
+            <h1>📼 REPLAY MODE</h1>
+            <p class="subtitle" id="filename-display">Loading...</p>
+        </header>
+
+        <!-- Reuse Stats Panel style -->
+        <div class="stats-panel">
+            <div class="stat-item"><span class="stat-label">Score</span><span class="stat-value" id="score">0</span>
+            </div>
+            <div class="stat-item"><span class="stat-label">AI Score</span><span class="stat-value"
+                    id="aiScore">0</span></div>
+        </div>
+
+        <div class="game-container">
+            <canvas id="gameCanvas"></canvas>
+            <div class="game-overlay" id="gameOverlay" style="display:none;">
+                <div id="overlayTitle"></div>
+                <div id="overlayMessage"></div>
+            </div>
+
+            <!-- Hidden elements required by game.js but not used in replay -->
+            <div style="display:none;">
+                <div id="bestScore"></div>
+                <div id="speed"></div>
+                <div id="eaten"></div>
+                <div id="boostIndicator"></div>
+                <div id="connectionStatus"><span class="status-text"></span></div>
+                <div id="timeLeft"></div>
+                <div class="ai-stat"></div>
+                <div class="timer"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Prevent default game init -->
+    <script>window.DISABLE_GAME_INIT = true;</script>
+    <script type="module" src="/static/replay.js"></script>
+</body>
+
+</html>

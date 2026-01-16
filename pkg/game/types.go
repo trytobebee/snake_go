@@ -56,6 +56,7 @@ type Game struct {
 	Direction          Point
 	LastMoveDir        Point // Direction of the last performed move
 	Score              int
+	LastScore          int          `json:"-"`           // Score from previous frame (for reward calc)
 	ScoreEvents        []ScoreEvent `json:"scoreEvents"` // Recent scoring events
 	GameOver           bool
 	PlayerStunnedUntil time.Time     `json:"-"`
@@ -97,6 +98,10 @@ type Game struct {
 	HitPoints    []Point     `json:"hitPoints"` // Points where fireballs hit something
 	Winner       string      `json:"winner"`    // "player", "ai", or "draw"
 	Mode         string      `json:"mode"`      // "zen" or "battle"
+
+	// Recording support
+	CurrentAIContext AIContext     `json:"-"` // Last calculated AI context
+	Recorder         *GameRecorder `json:"-"` // Active recorder
 }
 
 // FoodInfo is a DTO for food items sent to client
@@ -142,4 +147,41 @@ type GameConfig struct {
 	Height           int `json:"height"`
 	GameDuration     int `json:"gameDuration"`
 	FireballCooldown int `json:"fireballCooldown"`
+}
+
+// --- Recording & AI Training Structures ---
+
+// AIIntent represents the high-level strategic intent
+type AIIntent string
+
+const (
+	IntentHunt    AIIntent = "HUNT"    // Actively seeking food
+	IntentSurvive AIIntent = "SURVIVE" // Avoiding dead ends or threats
+	IntentAttack  AIIntent = "ATTACK"  // Engaging enemy
+	IntentIdle    AIIntent = "IDLE"    // No specific target
+)
+
+// AIContext records the internal state/decision of the AI
+type AIContext struct {
+	Intent    AIIntent `json:"intent"`
+	TargetPos *Point   `json:"target_pos,omitempty"`
+	Urgency   float64  `json:"urgency"` // 0.0 - 1.0
+}
+
+// ActionData represents the discrete action taken in a step
+type ActionData struct {
+	Direction Point `json:"dir"`
+	Boost     bool  `json:"boost"`
+	Fire      bool  `json:"fire"`
+}
+
+// StepRecord represents a single frame of game data for training
+type StepRecord struct {
+	StepID    int        `json:"step_id"`
+	Timestamp int64      `json:"ts"` // Unix Milli
+	State     GameState  `json:"state"`
+	Action    ActionData `json:"action"`
+	AIContext AIContext  `json:"ai_context"`
+	Reward    float64    `json:"reward"`
+	Done      bool       `json:"done"`
 }

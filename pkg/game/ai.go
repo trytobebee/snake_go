@@ -12,12 +12,16 @@ func (g *Game) UpdateAI() {
 		return
 	}
 
-	newDir, boosting := g.CalculateBestMove(g.Snake, g.LastMoveDir)
+	newDir, boosting, ctx := g.CalculateBestMove(g.Snake, g.LastMoveDir)
 	g.Boosting = boosting
 	g.SetDirection(newDir)
 
 	// Fireball logic for player AI
-	g.handleAIFire(g.Snake[0], g.Direction, "player")
+	didFire := g.handleAIFire(g.Snake[0], g.Direction, "player")
+	if didFire {
+		ctx.Intent = IntentAttack
+	}
+	g.CurrentAIContext = ctx
 }
 
 // UpdateCompetitorAI decides the next move for the AI competitor
@@ -26,7 +30,7 @@ func (g *Game) UpdateCompetitorAI() {
 		return
 	}
 
-	newDir, boosting := g.CalculateBestMove(g.AISnake, g.AILastDir)
+	newDir, boosting, _ := g.CalculateBestMove(g.AISnake, g.AILastDir)
 
 	// Aggressive AI logic (only in Berserker Mode):
 	// AI boosts if it's far from its target OR if it wants to race the player
@@ -115,9 +119,14 @@ func (g *Game) handleNormalAIFire(head Point, dir Point) {
 }
 
 // CalculateBestMove computes the best next move for a given snake
-func (g *Game) CalculateBestMove(snake []Point, lastMoveDir Point) (Point, bool) {
+func (g *Game) CalculateBestMove(snake []Point, lastMoveDir Point) (Point, bool, AIContext) {
+	ctx := AIContext{
+		Intent:  IntentIdle,
+		Urgency: 0.0,
+	}
+
 	if len(snake) == 0 {
-		return Point{X: 1, Y: 0}, false
+		return Point{X: 1, Y: 0}, false, ctx
 	}
 
 	head := snake[0]
@@ -159,8 +168,13 @@ func (g *Game) CalculateBestMove(snake []Point, lastMoveDir Point) (Point, bool)
 		}
 	}
 
+	if foundFood {
+		ctx.Intent = IntentHunt
+		ctx.TargetPos = &target.Pos
+	}
+
 	if !foundFood {
-		return lastMoveDir, false
+		return lastMoveDir, false, ctx
 	}
 
 	// Pathfinding logic
@@ -193,8 +207,10 @@ func (g *Game) CalculateBestMove(snake []Point, lastMoveDir Point) (Point, bool)
 		reachableSpace := g.countReachableSpace(nextPos)
 		score := float64(reachableSpace) * 50.0
 
+		isSurvive := false
 		if reachableSpace < snakeLen {
 			score -= 5000.0
+			isSurvive = true
 		}
 
 		distToFood := float64(abs(target.Pos.X-nextPos.X) + abs(target.Pos.Y-nextPos.Y))
@@ -210,18 +226,39 @@ func (g *Game) CalculateBestMove(snake []Point, lastMoveDir Point) (Point, bool)
 			distToTail := float64(abs(tail.X-nextPos.X) + abs(tail.Y-nextPos.Y))
 			urgency := float64(survivalThreshold - reachableSpace)
 			score += (100.0 - distToTail) * urgency * 0.5
+
+			if urgency > 5 {
+				isSurvive = true
+			}
 		}
 
 		if score > bestScore {
 			bestScore = score
 			bestDir = dir
+
+			if isSurvive {
+				ctx.Intent = IntentSurvive
+				if snakeLen > 0 {
+					ctx.Urgency = 1.0 - float64(reachableSpace)/float64(snakeLen*2)
+					if ctx.Urgency < 0 {
+						ctx.Urgency = 0
+					}
+				}
+			} else {
+				if foundFood {
+					ctx.Intent = IntentHunt
+				} else {
+					ctx.Intent = IntentIdle
+				}
+				ctx.Urgency = 0.0
+			}
 		}
 	}
 
-	return bestDir, shouldBoost
+	return bestDir, shouldBoost, ctx
 }
 
-func (g *Game) handleAIFire(head Point, dir Point, owner string) {
+func (g *Game) handleAIFire(head Point, dir Point, owner string) bool {
 	// Look further for targets (up to 10 tiles)
 	for dist := 1; dist <= 10; dist++ {
 		lookAhead := Point{X: head.X + dir.X*dist, Y: head.Y + dir.Y*dist}
@@ -265,7 +302,7 @@ func (g *Game) handleAIFire(head Point, dir Point, owner string) {
 
 		if isObstacle || isTarget {
 			g.FireByType(owner)
-			break
+			return true
 		}
 
 		// Don't shoot through food
@@ -280,6 +317,7 @@ func (g *Game) handleAIFire(head Point, dir Point, owner string) {
 			break
 		}
 	}
+	return false
 }
 
 // countReachableSpace uses a simple flood fill to count safe tiles

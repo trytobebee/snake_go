@@ -1,7 +1,7 @@
 import { SoundManager } from './modules/audio.js';
 import { GameRenderer } from './modules/renderer.js';
 
-class SnakeGameClient {
+export class SnakeGameClient {
     constructor() {
         this.canvas = document.getElementById('gameCanvas');
         this.ctx = this.canvas.getContext('2d');
@@ -508,4 +508,6 @@ class SnakeGameClient {
     }
 }
 
-document.addEventListener('DOMContentLoaded', () => { new SnakeGameClient(); });
+if (!window.DISABLE_GAME_INIT) {
+    document.addEventListener('DOMContentLoaded', () => { new SnakeGameClient(); });
+}
