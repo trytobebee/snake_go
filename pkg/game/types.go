@@ -102,6 +102,7 @@ type Game struct {
 	// Recording support
 	CurrentAIContext AIContext     `json:"-"` // Last calculated AI context
 	Recorder         *GameRecorder `json:"-"` // Active recorder
+	NeuralNet        *ONNXModel    `json:"-"` // Loaded AI Model (ONNX Runtime)
 }
 
 // FoodInfo is a DTO for food items sent to client

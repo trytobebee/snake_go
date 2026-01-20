@@ -1,6 +1,7 @@
 package game
 
 import (
+	"fmt"
 	"math/rand"
 
 	"github.com/trytobebee/snake_go/pkg/config"
@@ -12,16 +13,119 @@ func (g *Game) UpdateAI() {
 		return
 	}
 
-	newDir, boosting, ctx := g.CalculateBestMove(g.Snake, g.LastMoveDir)
-	g.Boosting = boosting
-	g.SetDirection(newDir)
+	// 1. Priority: Use Neural Net Brain if available
+	nnSuccess := false
+	if g.NeuralNet != nil {
+		input := g.GetFeatureGrid()
+		logits := Predict(input)
 
-	// Fireball logic for player AI
+		bestIdx := 0
+		var maxVal float32 = -1e9
+		for i, v := range logits {
+			if v > maxVal {
+				maxVal = v
+				bestIdx = i
+			}
+		}
+
+		var newDir Point
+		switch bestIdx {
+		case 0:
+			newDir = Point{X: 0, Y: -1}
+		case 1:
+			newDir = Point{X: 0, Y: 1}
+		case 2:
+			newDir = Point{X: -1, Y: 0}
+		case 3:
+			newDir = Point{X: 1, Y: 0}
+		}
+
+		if g.SetDirection(newDir) {
+			nextHead := Point{X: g.Snake[0].X + newDir.X, Y: g.Snake[0].Y + newDir.Y}
+			if g.isSafe(nextHead) {
+				g.CurrentAIContext = AIContext{Intent: IntentHunt, Urgency: 0.5}
+				nnSuccess = true
+			} else {
+				fmt.Println("🤖 NN suggested suicide, falling back to Heuristic AI...")
+			}
+		}
+	}
+
+	var ctx AIContext
+	// 2. Fallback: Heuristic AI (only if NN failed or not available)
+	if !nnSuccess {
+		var newDir Point
+		var boosting bool
+		newDir, boosting, ctx = g.CalculateBestMove(g.Snake, g.LastMoveDir)
+		g.Boosting = boosting
+		g.SetDirection(newDir)
+	} else {
+		// Even if NN set the direction, we still use Heuristic to decide on boosting and situational context
+		_, boosting, hCtx := g.CalculateBestMove(g.Snake, g.LastMoveDir)
+		g.Boosting = boosting
+		ctx = hCtx
+		ctx.Intent = IntentHunt // Keep NN intent primary
+	}
+
+	// 3. Final Actions: Fireball logic (Always run)
 	didFire := g.handleAIFire(g.Snake[0], g.Direction, "player")
 	if didFire {
 		ctx.Intent = IntentAttack
 	}
 	g.CurrentAIContext = ctx
+}
+
+// GetFeatureGrid generates the 6-channel input for the Neural Network
+// Channels: 0:PlayerHead, 1:PlayerBody, 2:EnemyHead, 3:EnemyBody, 4:Food, 5:Hazard
+func (g *Game) GetFeatureGrid() []float64 {
+	W, H := config.Width, config.Height // 25x25
+	size := W * H
+	grid := make([]float64, 6*size)
+
+	set := func(c, x, y int) {
+		if x >= 0 && x < W && y >= 0 && y < H {
+			grid[c*size+y*W+x] = 1.0
+		}
+	}
+
+	// Ch 0: Player Head
+	if len(g.Snake) > 0 {
+		set(0, g.Snake[0].X, g.Snake[0].Y)
+	}
+	// Ch 1: Player Body
+	if len(g.Snake) > 1 {
+		for _, p := range g.Snake[1:] {
+			set(1, p.X, p.Y)
+		}
+	}
+
+	// Ch 2: AI Head
+	if len(g.AISnake) > 0 {
+		set(2, g.AISnake[0].X, g.AISnake[0].Y)
+	}
+	// Ch 3: AI Body
+	if len(g.AISnake) > 1 {
+		for _, p := range g.AISnake[1:] {
+			set(3, p.X, p.Y)
+		}
+	}
+
+	// Ch 4: Food
+	for _, f := range g.Foods {
+		set(4, f.Pos.X, f.Pos.Y)
+	}
+
+	// Ch 5: Hazard (Obstacles + Fireballs)
+	for _, obs := range g.Obstacles {
+		for _, p := range obs.Points {
+			set(5, p.X, p.Y)
+		}
+	}
+	for _, fb := range g.Fireballs {
+		set(5, fb.Pos.X, fb.Pos.Y)
+	}
+
+	return grid
 }
 
 // UpdateCompetitorAI decides the next move for the AI competitor

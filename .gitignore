@@ -42,3 +42,9 @@ Thumbs.db
 # Game Records
 records/
 
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+ml/checkpoints/
+

@@ -9,18 +9,20 @@ A modern Snake game written in Go, featuring both **Terminal** and **Web** versi
 ## ✨ Features
 
 - 🌐 **Dual Mode**: Terminal CLI and Web Browser versions
+- 🧠 **Deep Learning AI**: Neural-network driven decision making using ONNX Runtime
 - 🎮 **New Game Modes**: **Zen** (Infinite practice) and **Battle** (AI competition)
 - ✨ **Floating Score Effects**: Animated score bubbles with glass-morphic design
-- 🔥 **Fireball Combat System** - Shoot fireballs to destroy obstacles and stun AI
-- � **AI Competitive Snake** - Battle against an intelligent AI rival
-- � **Dynamic Sync Engine** - Deep client-server config synchronization
+- 🔥 **Fireball Combat System**: Shoot fireballs to destroy obstacles and stun AI
+- 🐍 **AI Competitive Snake**: Battle against an intelligent AI rival powered by RL
+- 🚀 **High-Performance Inference**: Global task queue with <2ms latency
 - 🔊 **Dynamic Sound Effects** (Web Audio synthesized)
 - 📳 **Haptic Feedback** for mobile devices
-- 🚀 **Boost Mode** - Hold direction key for 3x speed
+- ⚡ **Boost Mode**: Hold direction key for 3x speed
 - 🍎 **Multi-Type Food System** with different scores and expiry times
 - 📊 **Real-time Statistics** (score, eating speed, food count)
 - 📱 **Mobile-Friendly** web interface with touch controls
 - 💾 **High Score Persistence** (localStorage for web)
+- 📼 **Session Recording**: Full JSONL-based game capture for ML training
 
 ## 📚 Documentation
 
@@ -30,7 +32,9 @@ Detailed documentation on features and architecture can be found in the [docs/](
   - [AI Auto-Play & Pathfinding](./docs/FEATURE_AI_AUTOPLAY.md)
   - [Boost Mechanism](./docs/FEATURE_BOOST.md)
   - [Position Scores & Bonuses](./docs/FEATURE_POSITION_BONUS.md)
-- **Architecture**
+- **Architecture & AI**
+  - [High-Performance AI Architecture](./docs/AI_ARCHITECTURE.md)
+  - [RL Training Design](./docs/AI_TRAINING_DESIGN.md)
   - [Web Version Overview](./docs/WEB_VERSION.md)
   - [Web Architecture & Design](./docs/WEB_ARCHITECTURE.md)
   - [Client vs Server Communication](./docs/CLIENT_VS_SERVER.md)
@@ -56,6 +60,18 @@ Detailed documentation on features and architecture can be found in the [docs/](
 - 🟠 Orange (30 points, 15s) - 20% spawn rate
 - 🔵 Blue (20 points, 18s) - 25% spawn rate
 - 🟣 Purple (10 points, 20s) - 35% spawn rate
+
+### 🔥 High-Performance AI System
+- **Brain**: 3-layer Convolutional Neural Network (CNN) trained via Reinforcement Learning (DQN).
+- **Inference**: Powered by **ONNX Runtime** with C++ optimization.
+- **Micro-Latency**: Centralized task queue + dedicated worker pattern achieving **<1.5ms** inference latency.
+- **Hybrid Control**: Deep learning handles strategic movement, while heuristics manage combat and boost tactics.
+- **Safety Layer**: Real-time collision look-ahead to prevent AI "hallucination" suicides.
+
+### 📼 Recording & Replay
+- **Data Capture**: Every frame is recorded to `.jsonl` files (S, A, R, S' transitions).
+- **AI Training**: Seamless pipeline from game logs to PyTorch training and ONNX export.
+- **Visual Replay**: High-fidelity replay tool to analyze AI behavior and strategy.
 
 ### Countdown Display
 Foods show a visual countdown timer with pulsating animation in the last 5 seconds

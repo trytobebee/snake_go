@@ -30,7 +30,16 @@ const (
 
 // Speed and boost settings
 const (
-	BaseTick             = 16 * time.Millisecond  // Base tick interval (~60 FPS)
+	BaseTick = 16 * time.Millisecond // Base tick interval (~60 FPS)
+	// Difficulty Settings (Number of BaseTicks per Move)
+	LowTicks  = 18
+	MidTicks  = 13
+	HighTicks = 9
+
+	// Boost settings: how many ticks during boost (usually ~1/3 of normal)
+	LowBoostTicks        = 6
+	MidBoostTicks        = 4
+	HighBoostTicks       = 3
 	NormalTicksPerUpdate = 18                     // Normal speed: 16ms * 18 = 288ms
 	BoostTicksPerUpdate  = 6                      // Boost: 16ms * 6 = 96ms
 	BoostTimeout         = 150 * time.Millisecond // Boost timeout duration

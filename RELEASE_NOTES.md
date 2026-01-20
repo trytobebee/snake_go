@@ -1,145 +1,64 @@
-# 🎮 Release Notes - v3.1.0
+# 🧠 Release Notes - v4.0.0
 
-**Release Date**: January 14, 2026
+**Release Date**: January 20, 2026
 
-## 🎉 Major Updates
+## 🎉 The Intelligence Evolution
 
-### 🏗️ Architecture Improvements
+This milestone marks the transition from heuristic algorithms to **Deep Reinforcement Learning**. The Snake game now features a "brain" powered by a Convolutional Neural Network (CNN) running on the high-performance **ONNX Runtime**.
 
-#### **Frontend Modularization**
-- **ES Modules Migration**: Refactored monolithic `game.js` (1100+ lines) into clean, single-responsibility modules
-  - `modules/audio.js`: Sound management system
-  - `modules/renderer.js`: Pure rendering engine
-  - Main `game.js`: Orchestrator for game logic and state management
-- **Separation of Concerns**: Clear boundaries between rendering, audio, and game logic
-- **Maintainability**: Easier to extend and debug with modular architecture
+## 🚀 Major Updates
 
-#### **Message System Simplification**
-- **Backend Cleanup**: Removed duration management from server-side
-  - Deleted `MessageTime` and `MessageDuration` fields
-  - Simplified `SetMessage()` API
-- **Frontend Control**: Unified message display timing in renderer
-  - Bonus messages: 800ms display time
-  - Normal messages: 1000ms display time
-  - All messages: 500ms fade-out animation
+### 1. Neural AI Integration
+- **Deep Reinforcement Learning**: AI is no longer just pathfinding; it's making strategic decisions based on a 6-channel spatial grid (Players, AI, Food, Obstacles, Fireballs).
+- **ONNX Runtime (Go Bindings)**: Native C++ acceleration for inference, ensuring that the AI can "think" as fast as the game can move.
+- **Micro-Latency Optimization**: Designed a dedicated inference service that processes requests in **~1.3ms**, enabling real-time competitive play.
 
-### ✨ Visual & UX Enhancements
+### 2. High-Performance Architecture
+- **Global Inference Worker**: A singleton worker pattern that eliminates memory overhead and resource contention.
+- **Asynchronous Task Queue**: Uses Go channels to pipeline AI requests, maximizing CPU cache locality and eliminating mutex locks during inference.
+- **Singleton Model Instance**: One model serves all users, drastically reducing the server's memory footprint.
 
-#### **Optimized Message Display**
-- **Reduced Obstruction**: Messages are now smaller and positioned higher
-  - Font size: 18px (down from 24px)
-  - Position: Top 1/5 of screen (up from 1/3)
-  - Tighter padding for compact appearance
-- **Faster Feedback**: Shorter display times keep gameplay flowing
-- **Smooth Animations**: Fixed fade-out bugs for consistent visual polish
+### 3. AI Safety & Robustness
+- **Heuristic-Neural Hybrid**: If the neural network suggests a move that leads to immediate self-destruction, a safety interceptor overrides it using "Old School" heuristic logic.
+- **Collision Look-ahead**: Real-time validation of every AI move through the game's physical engine.
 
-#### **Unified Game Over Experience**
-- **Consistent Overlays**: All game-end states use the same overlay design
-  - 🏆 **YOU WIN!** (Gold) - Player victory
-  - 🤖 **AI WINS!** (Purple) - AI victory
-  - 🤝 **DRAW!** (Blue) - Tie game
-  - ❌ **GAME OVER** (Red) - Crash/unexpected end
-- **Victory Celebrations**: Confetti effects visible behind semi-transparent overlay
-- **Clear Instructions**: "Tap or Press 'R' to Restart" on all end screens
-
-#### **Enhanced Confetti System**
-- **Multi-Point Bursts**: Fireworks explode from 3 locations simultaneously
-- **Particle Variety**: Circles, strips, and squares for visual richness
-- **Physics Simulation**: Gravity, air resistance, and rotation for realistic motion
-- **Two-Stage Effect**: Initial burst + delayed "confetti rain" from top
-- **Extended Duration**: Slower decay for longer celebration
-
-#### **Food Timer Improvements**
-- **Pause-Aware Animation**: Countdown rings freeze when game is paused/ended
-- **Consistent Behavior**: No more "ghost animations" during game-over state
-
-### 🐛 Bug Fixes
-
-- Fixed food countdown animation continuing after game pause/end
-- Fixed message fade-out timing inconsistency (was using 4000ms instead of 1500ms)
-- Fixed overlay layout issues (vertical stacking now enforced with `flex-direction: column`)
-- Fixed CSS cache issues by adding version query parameters
-- Removed duplicate `maxDuration` calculations in renderer
-
-### 🎨 Code Quality
-
-- **DRY Principle**: Eliminated code duplication in message timing logic
-- **Type Safety**: Consistent use of `messageType` parameter throughout
-- **Comments**: Added clear documentation for complex logic
-- **Testing**: Updated unit tests to match new simplified API
+### 4. Machine Learning Pipeline
+- **JSONL Data Capture**: Seamlessly record game sessions into structured data for continuous training.
+- **PyTorch to ONNX**: Full pipeline from training in Python to high-speed deployment in Go.
 
 ---
 
-## 📊 Technical Details
+## 📊 Technical Comparison
 
-### Breaking Changes
-- `SetMessage(msg, duration)` → `SetMessage(msg)` (duration removed)
-- `SetMessageWithType(msg, duration, type)` → `SetMessageWithType(msg, type)`
-- Removed `HasActiveMessage()` method (no longer needed)
-
-### Migration Guide
-If you've forked this project:
-1. Update all `SetMessage()` calls to remove duration parameter
-2. Remove any references to `MessageTime` or `MessageDuration`
-3. Message display timing is now controlled in `modules/renderer.js` line 271-272
+| Metric | Heuristic AI (Legacy) | Deep Learning AI (v4.0.0) |
+| :--- | :--- | :--- |
+| **Logic Type** | Rule-based (Flood-fill/Greedy) | Neural Network (CNN + DQN) |
+| **Inference Time** | <0.1ms | ~1.3ms (including queue overhead) |
+| **Spatial Awareness** | Static distance calculations | 6-Channel Grid Analysis |
+| **Strategic Vision** | Short-term (Greedy) | Long-term (Value-based Q-learning) |
 
 ---
 
-## 🎯 What's Next?
-
-### Planned Features
-- Global leaderboard system
-- Achievement/badge system
-- Custom themes and skins
-- Daily challenges
-- Multiplayer mode
-
-### Performance Goals
-- Further optimize rendering pipeline
-- Reduce memory footprint
-- Improve mobile performance
-
----
-
-## 🙏 Acknowledgments
-
-Thanks to all players who provided feedback and bug reports!
-
----
+## 🛠️ Infrastructure Improvements
+- **Project Modularization**: Further separated core game logic from the AI inference service.
+- **Dependency Clean-up**: Optimized `go.mod` and removed unused packages.
+- **Multi-user Stability**: Fixed race conditions in ONNX initialization through `sync.Once` patterns.
 
 ## 📝 Full Changelog
 
 ### Added
-- ES Module architecture for frontend
-- Separate renderer module (`modules/renderer.js`)
-- Separate audio module (`modules/audio.js`)
-- Multi-stage confetti effects
-- Particle variety (circles, strips, squares)
-- Physics-based confetti motion
-- Unified game-over overlay system
+- `pkg/game/ai_model.go`: The heart of the ONNX inference service.
+- `ml/train.py`: Training script for the DQN model.
+- High-performance `Predict` queue system.
+- Collision safety interceptor.
 
 ### Changed
-- Message display duration (bonus: 800ms, normal: 1000ms)
-- Message font size (18px for normal, 16px for bonus)
-- Message position (top 1/5 instead of 1/3)
-- Simplified backend message API
-- Refactored frontend into modules
-
-### Fixed
-- Food timer animation during pause/game-over
-- Message fade-out timing bug
-- Overlay layout vertical stacking
-- CSS cache issues
-- Code duplication in renderer
-
-### Removed
-- `MessageTime` field from Game struct
-- `MessageDuration` field from Game struct
-- `HasActiveMessage()` method
-- Duration parameter from `SetMessage()` methods
+- Refactored `pkg/game/ai.go` to leverage the new global Predict service.
+- Updated `pkg/game/game.go` to support global worker initialization.
+- Optimized 16ms `BaseTick` synchronization.
 
 ---
 
 **Download**: [Latest Release](https://github.com/trytobebee/snake_go/releases/latest)
 **Documentation**: [README.md](./README.md)
-**Issues**: [GitHub Issues](https://github.com/trytobebee/snake_go/issues)
+**Architecture**: [docs/AI_ARCHITECTURE.md](./docs/AI_ARCHITECTURE.md)

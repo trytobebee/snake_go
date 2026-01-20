@@ -255,20 +255,22 @@ func (gs *GameServer) update() {
 		return
 	}
 
-	// ... (ticks calculation unchanged)
-	ticksNeeded := 13 // Default Medium
-	boostTicks := 4
+	// Determine Tick threshold based on difficulty and boosting
+	ticksNeeded := config.MidTicks
+	boostTicks := config.MidBoostTicks
+
 	switch gs.difficulty {
 	case "low":
-		ticksNeeded = 18
-		boostTicks = 6
+		ticksNeeded = config.LowTicks
+		boostTicks = config.LowBoostTicks
 	case "mid":
-		ticksNeeded = 13
-		boostTicks = 4
+		ticksNeeded = config.MidTicks
+		boostTicks = config.MidBoostTicks
 	case "high":
-		ticksNeeded = 9
-		boostTicks = 3
+		ticksNeeded = config.HighTicks
+		boostTicks = config.HighBoostTicks
 	}
+
 	if gs.game.Boosting {
 		ticksNeeded = boostTicks
 	}
@@ -329,9 +331,9 @@ func (gs *GameServer) update() {
 
 	// Move AI snake independently
 	gs.aiTickCount++
-	aiTicksNeeded := 13 // Mid speed for AI
+	aiTicksNeeded := config.MidTicks
 	if gs.game.AIBoosting {
-		aiTicksNeeded = 4
+		aiTicksNeeded = config.MidBoostTicks
 	}
 	if gs.aiTickCount >= aiTicksNeeded {
 		gs.aiTickCount = 0

@@ -30,6 +30,18 @@ func NewGame() *Game {
 		TimerStarted: true,
 		Mode:         "battle",
 	}
+	// Start Global AI Inference Service if not already started
+	onnxPath := "ml/checkpoints/snake_policy.onnx"
+	err := StartInferenceService(onnxPath)
+	if err == nil {
+		// We use a dummy non-nil pointer for NeuralNet as a flag
+		// to indicate this game session should use the global AI service
+		g.NeuralNet = &ONNXModel{}
+		fmt.Println("🧠 Global AI Service (ONNX) is active for this game!")
+	} else {
+		fmt.Printf("⚠️  Global AI Service Error: %v. Using Heuristic AI.\n", err)
+	}
+
 	// Spawn initial food
 	g.spawnOneFood()
 	return g
@@ -340,19 +352,21 @@ func (g *Game) GetMoveInterval(difficulty string) time.Duration {
 }
 
 func (g *Game) GetMoveIntervalExt(difficulty string, boosted bool) time.Duration {
-	ticks := 13 // Default Medium
-	boostTicks := 4
+	ticks := config.MidTicks
+	boostTicks := config.MidBoostTicks
+
 	switch difficulty {
 	case "low":
-		ticks = 18
-		boostTicks = 6
+		ticks = config.LowTicks
+		boostTicks = config.LowBoostTicks
 	case "mid":
-		ticks = 13
-		boostTicks = 4
+		ticks = config.MidTicks
+		boostTicks = config.MidBoostTicks
 	case "high":
-		ticks = 9
-		boostTicks = 3
+		ticks = config.HighTicks
+		boostTicks = config.HighBoostTicks
 	}
+
 	if boosted {
 		ticks = boostTicks
 	}
@@ -371,16 +385,17 @@ func (g *Game) ToggleBoost(active bool) {
 
 // SetDirection sets the player snake direction
 func (g *Game) SetDirection(newDir Point) bool {
-	if newDir.X != 0 && g.Direction.X == -newDir.X {
+	// Determine the base of comparison: use LastMoveDir if it exists, otherwise g.Direction
+	// (LastMoveDir is empty before the very first move)
+	compareDir := g.LastMoveDir
+	if compareDir.X == 0 && compareDir.Y == 0 {
+		compareDir = g.Direction
+	}
+
+	if newDir.X != 0 && compareDir.X == -newDir.X {
 		return false
 	}
-	if newDir.Y != 0 && g.Direction.Y == -newDir.Y {
-		return false
-	}
-	if newDir.X != 0 && g.LastMoveDir.X == -newDir.X {
-		return false
-	}
-	if newDir.Y != 0 && g.LastMoveDir.Y == -newDir.Y {
+	if newDir.Y != 0 && compareDir.Y == -newDir.Y {
 		return false
 	}
 
