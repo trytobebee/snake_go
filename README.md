@@ -9,11 +9,11 @@ A modern Snake game written in Go, featuring both **Terminal** and **Web** versi
 ## ✨ Features
 
 - 🌐 **Dual Mode**: Terminal CLI and Web Browser versions
-- 🧠 **Deep Learning AI**: Neural-network driven decision making using ONNX Runtime
+- 🧠 **Deep Learning AI**: Neural-network driven decision making for **Auto-Play mode**
 - 🎮 **New Game Modes**: **Zen** (Infinite practice) and **Battle** (AI competition)
 - ✨ **Floating Score Effects**: Animated score bubbles with glass-morphic design
 - 🔥 **Fireball Combat System**: Shoot fireballs to destroy obstacles and stun AI
-- 🐍 **AI Competitive Snake**: Battle against an intelligent AI rival powered by RL
+- 🐍 **AI Competitive Snake**: Battle against an intelligent, heuristic-driven AI rival
 - 🚀 **High-Performance Inference**: Global task queue with <2ms latency
 - 🔊 **Dynamic Sound Effects** (Web Audio synthesized)
 - 📳 **Haptic Feedback** for mobile devices
@@ -61,11 +61,12 @@ Detailed documentation on features and architecture can be found in the [docs/](
 - 🔵 Blue (20 points, 18s) - 25% spawn rate
 - 🟣 Purple (10 points, 20s) - 35% spawn rate
 
-### 🔥 High-Performance AI System
-- **Brain**: 3-layer Convolutional Neural Network (CNN) trained via Reinforcement Learning (DQN).
-- **Inference**: Powered by **ONNX Runtime** with C++ acceleration.
+### 🔥 Intelligent AI Strategy
+- **Auto-Play Brain**: 3-layer Convolutional Neural Network (CNN) trained via Reinforcement Learning (DQN).
+- **Competitor AI**: Robust Heuristic engine using Flood-fill spatial awareness and Greedy utility logic.
+- **Inference**: High-speed **ONNX Runtime** with C++ acceleration for neural models.
 - **Latency**: Centralized task queue + worker pattern achieving **<1.5ms** total latency.
-- **Hybrid Control**: Deep learning strategic movement + Heuristic safety fallback.
+- **Hybrid Control**: Strategic movement + Heuristic safety fallback for autonomous play.
 - **Safety Gate**: Physical collision look-ahead prevents suicidal moves during inference.
 
 ### 🌐 High-Fidelity Sync Engine
@@ -112,6 +113,8 @@ Hold the current direction key to trigger 3x speed boost 🚀
 
 ## 🚀 Quick Start
 
+The project provides three main binaries: the **Terminal Game**, the **Web Server**, and the **Replay Viewer**.
+
 ### Run from Source
 
 ```bash
@@ -122,21 +125,28 @@ cd snake_go
 # Install dependencies
 go mod tidy
 
-# Run game
+# 1. Run Terminal version
 go run ./cmd/snake
+
+# 2. Run Web version (Server + UI)
+# Then open http://localhost:8080
+go run ./cmd/webserver
+
+# 3. Run Replay Viewer
+# Then open http://localhost:8081
+go run ./cmd/replay
 ```
 
-### Build Executable
+### Build Executables
 
 ```bash
 # Build for current platform
 go build -o snake ./cmd/snake
-
-# Run
-./snake
+go build -o webserver ./cmd/webserver
+go build -o replay ./cmd/replay
 ```
 
-### Cross-Platform Build
+### Multi-Platform Distribution
 
 Use the build script to compile for all platforms:
 
@@ -175,37 +185,41 @@ This creates executables in `dist/`:
 
 ## 📁 Project Structure
 
-The project follows a clean package architecture:
+The project follows a clean, modular architecture:
 
 ```
 snake_go/
 ├── cmd/
-│   └── snake/
-│       └── main.go           # Entry point, game loop orchestration
+│   ├── snake/               # Terminal game entry point
+│   ├── webserver/           # Web version entry point (WebSocket server)
+│   └── replay/              # Session replay tool entry point
 ├── pkg/
-│   ├── game/                 # Core game logic
-│   │   ├── types.go         # Game data structures
-│   │   ├── game.go          # Game state management
-│   │   ├── food.go          # Food-related logic
-│   │   └── ai.go            # AI & Auto-play logic (New)
-│   ├── renderer/             # Rendering layer
-│   │   └── terminal.go      # Terminal-based renderer
-│   ├── input/                # Input handling
-│   │   └── keyboard.go      # Keyboard input management
-│   └── config/               # Configuration
-│       └── config.go        # Game constants and settings
-├── build.sh                  # Multi-platform build script
-├── go.mod                    # Go module definition
-└── README.md                 # This file
+│   ├── game/                # Core game logic (Movement, Collisions, State)
+│   │   ├── ai.go            # Heuristic & Hybrid AI logic
+│   │   ├── ai_model.go      # ONNX Runtime inference service
+│   │   ├── recorder.go      # Session recording system
+│   │   └── food.go          # Multi-type food system
+│   ├── renderer/            # Rendering layer (Terminal-based)
+│   ├── input/               # Terminal input handling
+│   └── config/              # Centralized game constants & settings
+├── ml/                      # Machine Learning pipeline
+│   ├── train.py             # DQN training script
+│   ├── model.py             # CNN architecture
+│   └── dataset.py           # JSONL to tensor conversion
+├── web/
+│   └── static/              # Frontend (HTML, CSS, JS modules)
+├── docs/                    # Detailed technical documentation
+├── build.sh                 # Multi-platform build script
+└── README.md                # This file
 ```
 
-### Package Responsibilities
+### 🎯 Core Components
 
-- **`cmd/snake`**: Main entry point, coordinates all components
-- **`pkg/game`**: Core game logic (snake movement, collision, scoring)
-- **`pkg/renderer`**: Rendering abstraction (could support multiple renderers)
-- **`pkg/input`**: Input handling abstraction
-- **`pkg/config`**: Centralized configuration and constants
+- **`cmd/webserver`**: Orchestrates the multi-user WebSocket server and serves the frontend.
+- **`pkg/game`**: The "Physics Engine" of the game, shared across all versions.
+- **`pkg/game/ai_model.go`**: Implements the high-performance singleton inference worker.
+- **`ml/`**: Comprehensive Python environment for training the neural "brain".
+- **`web/static/modules`**: Modularized ES6 JavaScript frontend for the canvas game.
 
 ## 🔧 Dependencies
 

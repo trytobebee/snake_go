@@ -32,7 +32,7 @@ This script will:
 3. Export the final model to `checkpoints/snake_policy.onnx`.
 
 ### 4. Deploy to Go
-The Go game server automatically looks for `ml/checkpoints/snake_policy.onnx` on startup. Just restart the server to apply the new "brain".
+The Go game server automatically looks for `ml/checkpoints/snake_policy.onnx` on startup. This model is currently utilized for the **Player's Auto-Play mode**, providing neural-network-driven strategic guidance.
 
 ## 📊 Feature Grid Details (6 Channels)
 The model "sees" the board as a 6-layered 25x25 grid:
