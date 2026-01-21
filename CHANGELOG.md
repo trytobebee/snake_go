@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
+## [4.1.0] - 2026-01-21
+ 
+### 🛠️ Developer Experience & Environment
+- **Documentation Overhaul**:
+  - Added comprehensive "Dev Environment Setup" to README.
+  - Clarified system dependencies (ONNX Runtime) and Python environment setup.
+  - Added specific instructions for macOS Apple Silicon vs Intel.
+- **Python Compatibility**:
+  - Implemented automatic runtime Monkey Patch for `onnxscript` to support Python 3.14.
+  - Re-enabled high-performance ONNX Opset 18 export for modern PyTorch versions.
+ 
+### 🤖 Global AI Service
+- **Robustness**:
+  - Enhanced `StartInferenceService` to automatically detect ONNX Runtime libraries in multiple standard locations (Homebrew paths for M-series/Intel Macs & Linux).
+  - Added standalone diagnostic tool `cmd/check_onnx` to verify library linkage.
+ 
+### 🐛 Stability & Fixes
+- **Game Recording Logic**:
+  - Fixed a critical issue where game recordings were not saved if the game ended via AI victory or timeout (loop exit prevented final save).
+  - Removed artificial "+50/-100" rewards from the final frame to ensure cleaner, score-based ground truth for RL training.
+- **Logging**:
+  - Standardized all server output to use `log` (with timestamps) instead of raw `fmt.Print`.
+  - Removed misleading "Game Over" print statements that cluttered the terminal.
+ 
+---
+ 
 ## [4.0.0] - 2026-01-20
 
 ### 🧠 Deep Learning AI Integration

@@ -111,7 +111,62 @@ Hold the current direction key to trigger 3x speed boost 🚀
 - Total foods eaten
 - Best score (persisted)
 
-## 🚀 Quick Start
+## 🛠️ Dev Environment Setup
+26: 
+27: Follow these steps to set up a complete development environment, including the AI training pipeline.
+28: 
+29: ### 1. Install Go
+30: Ensure you have Go installed (version 1.21 or higher recommended).
+31: - **macOS**: `brew install go`
+32: - **Official Download**: [go.dev/dl](https://go.dev/dl/)
+33: 
+34: ### 2. Install System Dependencies (Crucial for AI)
+35: The AI inference engine relies on the C++ ONNX Runtime library. You **must** install this system-level dependency.
+36: 
+37: - **macOS (Homebrew)**:
+38:   ```bash
+39:   brew install onnxruntime
+40:   ```
+41: - **Linux/Windows**: Follow instructions at [ONNX Runtime Get Started](https://onnxruntime.ai/docs/install/).
+42: 
+43: ### 3. Initialize Project & Go Modules
+44: 
+45: ```bash
+46: # Clone repository
+47: git clone https://github.com/trytobebee/snake_go.git
+48: cd snake_go
+49: 
+50: # Download and verify Go dependencies
+51: go mod tidy
+52: ```
+53: 
+54: ### 4. Setup Python ML Environment
+55: If you want to train your own AI models or run the training pipeline, you need a Python environment.
+56: *Note: Supports Python 3.9 through 3.14. (Patches included for 3.14+ compatibility)*
+57: 
+58: ```bash
+59: # 1. Create a virtual environment (recommended)
+60: python3 -m venv venv
+61: 
+62: # 2. Activate it
+63: source venv/bin/activate  # macOS/Linux
+64: # .\venv\Scripts\activate # Windows
+65: 
+66: # 3. Install Python dependencies
+67: pip install -r ml/requirements.txt
+68: ```
+69: 
+70: ### 5. Initialize the AI Brain (Optional)
+71: The game comes with a pre-trained model, but if you want to generate a fresh one from your recorded gameplay:
+72: 
+73: ```bash
+74: cd ml
+75: python3 train.py
+76: # This will generate 'checkpoints/snake_policy.onnx' used by the game.
+77: cd ..
+78: ```
+79: 
+80: ## 🚀 Quick Start
 
 The project provides three main binaries: the **Terminal Game**, the **Web Server**, and the **Replay Viewer**.
 

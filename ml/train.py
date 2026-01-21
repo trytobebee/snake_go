@@ -6,6 +6,29 @@ from dataset import SnakeOfflineRLDataset
 from model import SnakePolicyNet
 import os
 import copy
+import logging
+
+# --- Monkey Patch for Python 3.14 / onnxscript compatibility ---
+# The onnxscript library has a strict type check that fails with Python 3.14's typing system.
+# We patch the constructor to ignore this specific error since the object is initialized correctly anyway.
+try:
+    import onnxscript.values
+    _orig_init = onnxscript.values.AttrRef.__init__
+
+    def _patched_init(self, attr_name, typeinfo, info):
+        try:
+            _orig_init(self, attr_name, typeinfo, info)
+        except TypeError as e:
+            if "Expecting a type not" in str(e):
+                pass # Ignore the type check failure
+            else:
+                raise e
+
+    onnxscript.values.AttrRef.__init__ = _patched_init
+    print("🔧 Applied onnxscript Python 3.14 compatibility patch.")
+except ImportError:
+    pass
+# ---------------------------------------------------------------
 
 def train_rl():
     # 1. Config

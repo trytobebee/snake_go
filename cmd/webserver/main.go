@@ -349,6 +349,33 @@ func (gs *GameServer) update() {
 			gs.game.UpdateFireballs()
 		}
 	}
+
+	// Final check: If game over happened anywhere (AI, Timer, Fireball) and recording is still on
+	if gs.game.GameOver && gs.game.Recorder != nil {
+		// Capture final state
+		snapshot := gs.game.GetGameStateSnapshot(gs.started, gs.boosting, gs.difficulty)
+
+		// Final Reward Calculation: Pure score difference only
+		// We avoid adding artificial Win/Loss large rewards to prevent disturbing the AI's learning stability.
+		reward := float64(gs.game.Score - gs.game.LastScore)
+
+		rec := game.StepRecord{
+			StepID:    gs.stepID,
+			Timestamp: time.Now().UnixMilli(),
+			State:     snapshot,
+			Action: game.ActionData{
+				Direction: gs.game.LastMoveDir,
+				Boost:     gs.game.Boosting, // Keep last state
+				Fire:      false,
+			},
+			AIContext: gs.game.CurrentAIContext,
+			Reward:    reward,
+			Done:      true,
+		}
+		gs.game.Recorder.RecordStep(rec)
+
+		gs.stopRecording()
+	}
 }
 
 func handleWebSocket(w http.ResponseWriter, r *http.Request) {
@@ -457,8 +484,8 @@ func main() {
 	http.HandleFunc("/ws", handleWebSocket)
 
 	port := ":8080"
-	fmt.Printf("🚀 Snake Game Web Server starting on http://localhost%s\n", port)
-	fmt.Println("📱 Open your browser and visit: http://localhost:8080")
+	log.Printf("🚀 Snake Game Web Server starting on http://localhost%s\n", port)
+	log.Println("📱 Open your browser and visit: http://localhost:8080")
 
 	log.Fatal(http.ListenAndServe(port, nil))
 }

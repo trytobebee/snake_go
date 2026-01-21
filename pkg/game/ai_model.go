@@ -2,6 +2,7 @@ package game
 
 import (
 	"fmt"
+	"os"
 	"runtime"
 	"sync"
 
@@ -116,11 +117,34 @@ var ortInitialized sync.Once
 func initORT() error {
 	var err error
 	ortInitialized.Do(func() {
-		libPath := "/opt/homebrew/opt/onnxruntime/lib/libonnxruntime.dylib"
-		if runtime.GOOS == "linux" {
-			libPath = "/usr/lib/libonnxruntime.so"
+		// Common paths for onnxruntime
+		possiblePaths := []string{
+			"/opt/homebrew/opt/onnxruntime/lib/libonnxruntime.dylib", // Apple Silicon Homebrew
+			"/usr/local/opt/onnxruntime/lib/libonnxruntime.dylib",    // Intel Homebrew
+			"/usr/local/lib/libonnxruntime.dylib",                    // Manual install
 		}
-		ort.SetSharedLibraryPath(libPath)
+
+		if runtime.GOOS == "linux" {
+			possiblePaths = []string{
+				"/usr/lib/libonnxruntime.so",
+				"/usr/local/lib/libonnxruntime.so",
+			}
+		}
+
+		var foundPath string
+		for _, path := range possiblePaths {
+			if _, e := os.Stat(path); e == nil {
+				foundPath = path
+				break
+			}
+		}
+
+		if foundPath == "" {
+			err = fmt.Errorf("onnxruntime library not found. Please install it (e.g., 'brew install onnxruntime' on macOS)")
+			return
+		}
+
+		ort.SetSharedLibraryPath(foundPath)
 		err = ort.InitializeEnvironment()
 	})
 	return err
