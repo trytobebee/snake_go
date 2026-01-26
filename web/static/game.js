@@ -101,6 +101,8 @@ export class SnakeGameClient {
         this.cancelMatchBtn = document.getElementById('cancelMatchBtn');
 
         if (this.btnLogoutUser) this.btnLogoutUser.onclick = () => this.handleLogout();
+        if (this.btnLogin) this.btnLogin.onclick = () => this.handleAuth('login');
+        if (this.btnRegister) this.btnRegister.onclick = () => this.handleAuth('register');
 
         if (this.cancelMatchBtn) {
             this.cancelMatchBtn.onclick = (e) => {
