@@ -813,18 +813,25 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	defer conn.Close()
 
 	log.Println("New WebSocket connection from:", r.RemoteAddr)
-	atomic.AddInt32(&totalSessions, 1)
-	broadcastSessionCount()
-
 	// Generate a short unique ID for this connection
 	connID := fmt.Sprintf("%d", time.Now().UnixNano()%10000)
 
 	gs := NewGameServer(connID)
 
+	// Mutex to protect concurrent writes to the WebSocket connection
+	gs.safeWriteJSON = func(v interface{}) error {
+		gs.writeMu.Lock()
+		defer gs.writeMu.Unlock()
+		return conn.WriteJSON(v)
+	}
+
 	// Add to global client tracking for broadcasts
 	clientsMu.Lock()
 	clients[connID] = gs
 	clientsMu.Unlock()
+
+	atomic.AddInt32(&totalSessions, 1)
+	broadcastSessionCount()
 
 	defer func() {
 		clientsMu.Lock()
@@ -849,15 +856,6 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		gs.ticker.Stop()
 		gs.stopRecording()
 	}()
-
-	// Mutex to protect concurrent writes to the WebSocket connection
-	gs.safeWriteJSON = func(v interface{}) error {
-		gs.writeMu.Lock()
-		defer gs.writeMu.Unlock()
-		return conn.WriteJSON(v)
-	}
-
-	// ... (Rest of handleWebSocket unchanged: send config, state, loops)
 
 	// Send initial config
 	gameConfig := gs.game.GetGameConfig()
@@ -911,6 +909,11 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 					log.Printf("✅ Register success: %s\n", msg.Username)
 					gs.safeWriteJSON(ServerMessage{Type: "auth_success", Success: "Account created! Please login."})
 				}
+				continue
+			}
+
+			if msg.Action == "ping" {
+				gs.safeWriteJSON(ServerMessage{Type: "pong"})
 				continue
 			}
 

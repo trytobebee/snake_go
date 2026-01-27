@@ -51,6 +51,8 @@ export class SnakeGameClient {
         this.floatingScores = [];
         this.lastFireTime = 0;
         this.currentUser = null;
+        this.pingStartTime = 0;
+        this.pingDisplay = document.getElementById('pingDisplay');
 
         // Leaderboard state
         this.leaderboards = { scores: [], winRates: [] };
@@ -85,6 +87,7 @@ export class SnakeGameClient {
         this.timerEl = document.querySelector('.timer');
         this.winRateEl = document.getElementById('winRate');
         this.gamesWonEl = document.getElementById('gamesWon');
+        this.pingDisplay = document.getElementById('pingDisplay');
 
         // Leaderboard Elements
         this.leaderboardList = document.getElementById('leaderboardList');
@@ -276,6 +279,9 @@ export class SnakeGameClient {
                     localStorage.removeItem('snake_auth');
                 }
             }
+            // Start pinging to measure latency
+            this.sendPing();
+            this.pingInterval = setInterval(() => this.sendPing(), 5000);
         };
         this.ws.onmessage = (event) => {
             const msg = JSON.parse(event.data);
@@ -304,6 +310,8 @@ export class SnakeGameClient {
                 this.onAuthError(msg.error);
             } else if (msg.type === 'update_counts') {
                 this.updatePlayerCount(msg.sessionCount);
+            } else if (msg.type === 'pong') {
+                this.handlePong();
             }
         };
         this.ws.onerror = () => {
@@ -315,6 +323,10 @@ export class SnakeGameClient {
             this.updateConnectionStatus('disconnected');
             this.isMatching = false;
             this.updateOverlay();
+            if (this.pingInterval) {
+                clearInterval(this.pingInterval);
+                this.pingInterval = null;
+            }
             setTimeout(() => this.setupWebSocket(), 3000);
         };
     }
@@ -868,6 +880,23 @@ export class SnakeGameClient {
         const el = document.getElementById('totalPlayers');
         if (el) {
             el.textContent = `👥 ${count} Player${count !== 1 ? 's' : ''}`;
+        }
+    }
+
+    sendPing() {
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.pingStartTime = performance.now();
+            this.ws.send(JSON.stringify({ action: 'ping' }));
+        }
+    }
+
+    handlePong() {
+        if (this.pingStartTime) {
+            const latency = Math.round(performance.now() - this.pingStartTime);
+            if (this.pingDisplay) {
+                this.pingDisplay.textContent = `Ping: ${latency} ms`;
+                this.pingDisplay.className = 'ping-display ' + (latency < 100 ? 'good' : (latency < 200 ? 'medium' : 'bad'));
+            }
         }
     }
 }
