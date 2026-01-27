@@ -51,13 +51,14 @@ func (f *Food) GetTotalScore(boardWidth, boardHeight int) int {
 func (f *Food) GetBonusMessage(boardWidth, boardHeight int) string {
 	bonus := f.GetPositionBonus(boardWidth, boardHeight)
 
-	if bonus == 100 {
+	switch bonus {
+	case 100:
 		return "🏆 恭喜！角落挑战 +100 分！"
-	} else if bonus == 30 {
+	case 30:
 		return "⭐ 不错！靠边奖励 +30 分！"
+	default:
+		return ""
 	}
-
-	return ""
 }
 
 // GetDuration returns the food's lifetime duration

@@ -66,13 +66,14 @@ func (g *Game) spawnOneFood() {
 	// Randomly select food type with weighted probability
 	randNum := rand.Intn(100)
 	var foodType FoodType
-	if randNum < 15 { // 15% red (high score)
+	switch {
+	case randNum < 15: // 15% red (high score)
 		foodType = FoodRed
-	} else if randNum < 35 { // 20% orange
+	case randNum < 35: // 20% orange
 		foodType = FoodOrange
-	} else if randNum < 65 { // 25% blue
+	case randNum < 65: // 25% blue
 		foodType = FoodBlue
-	} else { // 35% purple (low score)
+	default: // 35% purple (low score)
 		foodType = FoodPurple
 	}
 
@@ -245,11 +246,12 @@ func (g *Game) CheckTimeLimit() {
 		if len(g.Players) >= 2 {
 			s1 := g.Players[0].Score
 			s2 := g.Players[1].Score
-			if s1 > s2 {
+			switch {
+			case s1 > s2:
 				g.Winner = "player"
-			} else if s2 > s1 {
+			case s2 > s1:
 				g.Winner = "ai"
-			} else {
+			default:
 				g.Winner = "draw"
 			}
 		} else {
@@ -826,11 +828,4 @@ func (g *Game) GetGameConfig() GameConfig {
 		GameDuration:     int(config.GameDuration.Seconds()),
 		FireballCooldown: int(config.FireballCooldown.Milliseconds()),
 	}
-}
-
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
 }

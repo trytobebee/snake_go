@@ -408,11 +408,14 @@ func (m *Match) handleMatchOver() {
 			game.RecordGameSession(m.P1.user.Username, m.P1.sessionStart, time.Now(), gameObj.Players[0].Score, gameObj.Winner, "pvp", m.P1.difficulty)
 		}
 		if m.P2.user != nil && len(gameObj.Players) > 1 {
-			p2Res := "lost"
-			if gameObj.Winner == "ai" {
+			var p2Res string
+			switch gameObj.Winner {
+			case "ai":
 				p2Res = "won"
-			} else if gameObj.Winner == "draw" {
+			case "draw":
 				p2Res = "draw"
+			default:
+				p2Res = "lost"
 			}
 			game.RecordGameSession(m.P2.user.Username, m.P2.sessionStart, time.Now(), gameObj.Players[1].Score, p2Res, "pvp", m.P2.difficulty)
 		}
@@ -737,9 +740,10 @@ func (gs *GameServer) update() {
 			// In PVP, 'player' means P1 wins, 'ai' means P2 wins
 			won := false
 			if gs.game.IsPVP {
-				if gs.role == "p1" {
+				switch gs.role {
+				case "p1":
 					won = gs.game.Winner == "player"
-				} else if gs.role == "p2" {
+				case "p2":
 					won = gs.game.Winner == "ai"
 				}
 			} else {
