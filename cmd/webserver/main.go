@@ -1,18 +1,22 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
-	"sync/atomic"
-
 	"github.com/gorilla/websocket"
+	"github.com/joho/godotenv"
 	"github.com/trytobebee/snake_go/pkg/config"
 	"github.com/trytobebee/snake_go/pkg/game"
+	pb "github.com/trytobebee/snake_go/pkg/proto"
+	"google.golang.org/protobuf/proto"
 )
 
 var (
@@ -25,10 +29,14 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
+const (
+	MaxPlayers = 500
+)
+
 // Global map to track active IP connections
 var (
-	activeIPs     sync.Map
-	totalSessions int32
+	clientsMu sync.RWMutex
+	clients   = make(map[string]*GameServer)
 )
 
 // Global leaderboard manager
@@ -83,32 +91,14 @@ type GameServer struct {
 	sessionStart  time.Time
 
 	// Connection management
-	writeMu       sync.Mutex
-	safeWriteJSON func(v interface{}) error
+	writeMu sync.Mutex
+	sendMsg func(v *pb.ServerMessage) error
 }
 
 // ... (ServerMessage, ClientMessage structs unchanged)
 
 // ... (ServerMessage, ClientMessage structs unchanged)
-type ServerMessage struct {
-	Type         string                  `json:"type"`
-	Config       *game.GameConfig        `json:"config,omitempty"`
-	State        *game.GameState         `json:"state,omitempty"`
-	Leaderboard  []game.LeaderboardEntry `json:"leaderboard,omitempty"`
-	WinRates     []game.WinRateEntry     `json:"win_rates,omitempty"`
-	User         *game.User              `json:"user,omitempty"`
-	Error        string                  `json:"error,omitempty"`
-	Success      string                  `json:"success,omitempty"`
-	SessionCount int                     `json:"sessionCount,omitempty"`
-}
-
-type ClientMessage struct {
-	Action   string `json:"action"`
-	Name     string `json:"name,omitempty"`     // For score submission
-	Username string `json:"username,omitempty"` // For auth
-	Password string `json:"password,omitempty"` // For auth
-	Mode     string `json:"mode,omitempty"`     // For "auto" action (neural/heuristic)
-}
+// No longer using internal ServerMessage/ClientMessage as they are now in proto package
 
 func NewGameServer(connID string) *GameServer {
 	gs := &GameServer{
@@ -271,13 +261,12 @@ func (mm *MatchMaker) FindMatch(gs *GameServer) {
 	log.Printf("[PVP] 🔗 Both players attached to Match. P1: %s, P2: %s. Sending initial MATCH FOUND msg.\n", p1.user.Username, p2.user.Username)
 
 	// Initial broadcast with "MATCH FOUND"
-	msg := ServerMessage{Type: "state"}
 	st := sharedGame.GetGameStateSnapshot(true, false, "mid")
 	st.Message = "⚔️ MATCH FOUND!"
 	st.MessageType = "important"
-	msg.State = &st
-	p1.safeWriteJSON(msg)
-	p2.safeWriteJSON(msg)
+
+	p1.sendMsg(pb.ToProtoServerMessage("state", nil, &st, nil, nil, nil, "", "", 0))
+	p2.sendMsg(pb.ToProtoServerMessage("state", nil, &st, nil, nil, nil, "", "", 0))
 
 	log.Printf("[PVP] ⏱️ Starting 3-second countdown for %s vs %s\n", p1.user.Username, p2.user.Username)
 	go mm.runPVPCountdown(match)
@@ -302,10 +291,10 @@ func (mm *MatchMaker) runPVPCountdown(m *Match) {
 		m.Mu.Unlock()
 
 		log.Printf("[PVP] 🔔 Countdown: %d... (Players: %s, %s)\n", i, m.P1.user.Username, m.P2.user.Username)
-		msg := ServerMessage{Type: "state", State: &state}
-		m.P1.safeWriteJSON(msg)
-		m.P2.safeWriteJSON(msg)
+		m.P1.sendMsg(pb.ToProtoServerMessage("state", nil, &state, nil, nil, nil, "", "", 0))
+		m.P2.sendMsg(pb.ToProtoServerMessage("state", nil, &state, nil, nil, nil, "", "", 0))
 		time.Sleep(1 * time.Second)
+
 	}
 
 	m.Mu.Lock()
@@ -335,21 +324,23 @@ func (mm *MatchMaker) runPVPGame(m *Match) {
 		}
 
 		// Update game logic (using P1 as the "driver" for settings context)
-		// We'll simulate a GameServer update call but on the shared game
-		// Create a temporary "controller" GameServer for the update logic
 		p1 := m.P1
-		p1.update() // This updates the shared m.Game
+		changed := p1.update() // This updates the shared m.Game
 
-		state := m.Game.GetGameStateSnapshot(true, false, p1.difficulty)
+		if changed {
+			state := m.Game.GetGameStateSnapshot(true, false, p1.difficulty)
 
-		msg := ServerMessage{
-			Type:  "state",
-			State: &state,
+			// Broadcast to both
+			m.P1.sendMsg(pb.ToProtoServerMessage("state", nil, &state, nil, nil, nil, "", "", 0))
+			m.P2.sendMsg(pb.ToProtoServerMessage("state", nil, &state, nil, nil, nil, "", "", 0))
+
+			// Reset one-shot effects ONLY after broadcast
+
+			m.Game.ScoreEvents = nil
+			m.Game.HitPoints = nil
+			m.Game.Message = ""
+			m.Game.MessageType = ""
 		}
-
-		// Broadcast to both
-		m.P1.safeWriteJSON(msg)
-		m.P2.safeWriteJSON(msg)
 
 		if m.Game.GameOver {
 			log.Printf("[PVP] 🏁 Match Over detected in loop (%s vs %s). Winner: %s\n", m.P1.user.Username, m.P2.user.Username, m.Game.Winner)
@@ -361,12 +352,6 @@ func (mm *MatchMaker) runPVPGame(m *Match) {
 			m.Mu.Unlock()
 			return
 		}
-
-		// Reset one-shot effects
-		m.Game.ScoreEvents = nil
-		m.Game.HitPoints = nil
-		m.Game.Message = ""
-		m.Game.MessageType = ""
 		m.Mu.Unlock()
 	}
 
@@ -387,7 +372,7 @@ func (m *Match) handleMatchOver() {
 		updated, _ := userManager.UpdateStats(m.P1.user.Username, gameObj.Players[0].Score, won)
 		if updated != nil {
 			m.P1.user = updated
-			m.P1.safeWriteJSON(ServerMessage{Type: "auth_success", User: updated})
+			m.P1.sendMsg(pb.ToProtoServerMessage("auth_success", nil, nil, nil, nil, updated, "", "", 0))
 		}
 	}
 
@@ -397,7 +382,7 @@ func (m *Match) handleMatchOver() {
 		updated, _ := userManager.UpdateStats(m.P2.user.Username, gameObj.Players[1].Score, won)
 		if updated != nil {
 			m.P2.user = updated
-			m.P2.safeWriteJSON(ServerMessage{Type: "auth_success", User: updated})
+			m.P2.sendMsg(pb.ToProtoServerMessage("auth_success", nil, nil, nil, nil, updated, "", "", 0))
 		}
 	}
 
@@ -590,14 +575,16 @@ func (gs *GameServer) updateBoostingOnly() {
 	}
 }
 
-func (gs *GameServer) update() {
+func (gs *GameServer) update() bool {
+	changed := false
+
 	// Sync manual boosting state to game if not in AutoPlay
 	gs.updateBoostingOnly()
 
 	gs.tickCount++
 
 	if !gs.started {
-		return
+		return false
 	}
 
 	// Determine Tick threshold based on difficulty and boosting
@@ -633,6 +620,7 @@ func (gs *GameServer) update() {
 		gs.tickCount = 0
 		if !gs.game.GameOver && !gs.game.Paused {
 			gs.game.Update()
+			changed = true
 
 			// --- Recording Logic ---
 			if gs.game.Recorder != nil && len(gs.game.Players) > 0 {
@@ -702,7 +690,13 @@ func (gs *GameServer) update() {
 		gs.fireballTickCount = 0
 		if !gs.game.GameOver && !gs.game.Paused {
 			gs.game.UpdateFireballs()
+			changed = true
 		}
+	}
+
+	// Any message or special event also counts as a change
+	if gs.game.Message != "" || len(gs.game.HitPoints) > 0 || len(gs.game.ScoreEvents) > 0 {
+		changed = true
 	}
 
 	// Handle Game Over logic (Stats, Leaderboard, Recording)
@@ -786,25 +780,66 @@ func (gs *GameServer) update() {
 
 			// Mark as processed for this session
 			gs.started = false
+			changed = true
 		}
+	}
+	return changed
+}
+
+func notifyFeishu(username, feedback string) {
+	webhookURL := os.Getenv("FEISHU_WEBHOOK_URL")
+	if webhookURL == "" {
+		return
+	}
+
+	// 构造卡片消息，这种格式在飞书中显示最稳定且美观
+	payload := map[string]interface{}{
+		"msg_type": "interactive",
+		"card": map[string]interface{}{
+			"header": map[string]interface{}{
+				"title": map[string]interface{}{
+					"tag":     "plain_text",
+					"content": "🐍 贪吃蛇游戏 - 新用户反馈",
+				},
+				"template": "blue", // 蓝色页眉
+			},
+			"elements": []map[string]interface{}{
+				{
+					"tag": "div",
+					"text": map[string]interface{}{
+						"tag": "lark_md",
+						"content": fmt.Sprintf("**用户ID:** %s\n**反馈时间:** %s\n\n**反馈详情:**\n%s",
+							username, time.Now().Format("2006-01-02 15:04:05"), feedback),
+					},
+				},
+			},
+		},
+	}
+
+	jsonPayload, _ := json.Marshal(payload)
+	resp, err := http.Post(webhookURL, "application/json", bytes.NewBuffer(jsonPayload))
+	if err != nil {
+		log.Printf("❌ Failed to send Feishu notification: %v\n", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		log.Printf("⚠️ Feishu returned non-OK status: %s\n", resp.Status)
+	} else {
+		log.Printf("🔔 Feishu card notification sent successfully!\n")
 	}
 }
 
-var (
-	clientsMu sync.RWMutex
-	clients   = make(map[string]*GameServer)
-)
-
 func broadcastSessionCount() {
-	count := int(atomic.LoadInt32(&totalSessions))
-	msg := ServerMessage{
-		Type:         "update_counts",
-		SessionCount: count,
-	}
+	clientsMu.RLock()
+	count := len(clients)
+	clientsMu.RUnlock()
+
 	clientsMu.RLock()
 	defer clientsMu.RUnlock()
 	for _, gs := range clients {
-		gs.safeWriteJSON(msg)
+		gs.sendMsg(pb.ToProtoServerMessage("update_counts", nil, nil, nil, nil, nil, "", "", count))
 	}
 }
 
@@ -823,10 +858,27 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	gs := NewGameServer(connID)
 
 	// Mutex to protect concurrent writes to the WebSocket connection
-	gs.safeWriteJSON = func(v interface{}) error {
+	gs.sendMsg = func(v *pb.ServerMessage) error {
 		gs.writeMu.Lock()
 		defer gs.writeMu.Unlock()
-		return conn.WriteJSON(v)
+		data, err := proto.Marshal(v)
+		if err != nil {
+			return err
+		}
+		return conn.WriteMessage(websocket.BinaryMessage, data)
+	}
+
+	// Check for player limit
+	clientsMu.RLock()
+	currentCount := len(clients)
+	clientsMu.RUnlock()
+
+	if currentCount >= MaxPlayers {
+		log.Printf("🚫 Connection rejected: server full (%d/%d)\n", currentCount, MaxPlayers)
+		msg := pb.ToProtoServerMessage("error", nil, nil, nil, nil, nil, "Server is full (500/500). Please wait for a player to leave and try refreshing.", "", 0)
+		data, _ := proto.Marshal(msg)
+		conn.WriteMessage(websocket.BinaryMessage, data)
+		return
 	}
 
 	// Add to global client tracking for broadcasts
@@ -834,14 +886,12 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	clients[connID] = gs
 	clientsMu.Unlock()
 
-	atomic.AddInt32(&totalSessions, 1)
 	broadcastSessionCount()
 
 	defer func() {
 		clientsMu.Lock()
 		delete(clients, connID)
 		clientsMu.Unlock()
-		atomic.AddInt32(&totalSessions, -1)
 		broadcastSessionCount()
 
 		// Fix: Remove from matchmaking queue if waiting
@@ -863,43 +913,40 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	// Send initial config
 	gameConfig := gs.game.GetGameConfig()
-	gs.safeWriteJSON(ServerMessage{
-		Type:   "config",
-		Config: &gameConfig,
-	})
+	gs.sendMsg(pb.ToProtoServerMessage("config", &gameConfig, nil, nil, nil, nil, "", "", 0))
 
 	// Send leaderboards
-	gs.safeWriteJSON(ServerMessage{
-		Type:        "leaderboard",
-		Leaderboard: lbManager.GetEntries(),
-		WinRates:    lbManager.GetWinRateEntries(),
-	})
+	gs.sendMsg(pb.ToProtoServerMessage("leaderboard", nil, nil, lbManager.GetEntries(), lbManager.GetWinRateEntries(), nil, "", "", 0))
 
 	initialState := gs.getGameState()
-	gs.safeWriteJSON(ServerMessage{
-		Type:  "state",
-		State: &initialState,
-	})
+	gs.sendMsg(pb.ToProtoServerMessage("state", nil, &initialState, nil, nil, nil, "", "", 0))
 
 	// Input handling goroutine
 	go func() {
 		for {
-			var msg ClientMessage
-			err := conn.ReadJSON(&msg)
+			_, data, err := conn.ReadMessage()
 			if err != nil {
 				log.Println("Read error:", err)
 				return
 			}
+
+			var msg pb.ClientMessage
+			err = proto.Unmarshal(data, &msg)
+			if err != nil {
+				log.Println("Protobuf unmarshal error:", err)
+				continue
+			}
+
 			if msg.Action == "login" {
 				log.Printf("🔑 Login attempt: %s\n", msg.Username)
 				user, err := userManager.Login(msg.Username, msg.Password)
 				if err != nil {
 					log.Printf("❌ Login failed: %v\n", err)
-					gs.safeWriteJSON(ServerMessage{Type: "auth_error", Error: err.Error()})
+					gs.sendMsg(pb.ToProtoServerMessage("auth_error", nil, nil, nil, nil, nil, err.Error(), "", 0))
 				} else {
 					log.Printf("✅ Login success: %s\n", msg.Username)
 					gs.user = user
-					gs.safeWriteJSON(ServerMessage{Type: "auth_success", User: user})
+					gs.sendMsg(pb.ToProtoServerMessage("auth_success", nil, nil, nil, nil, user, "", "", 0))
 				}
 				continue
 			}
@@ -908,16 +955,29 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 				err := userManager.Register(msg.Username, msg.Password)
 				if err != nil {
 					log.Printf("❌ Register failed: %v\n", err)
-					gs.safeWriteJSON(ServerMessage{Type: "auth_error", Error: err.Error()})
+					gs.sendMsg(pb.ToProtoServerMessage("auth_error", nil, nil, nil, nil, nil, err.Error(), "", 0))
 				} else {
 					log.Printf("✅ Register success: %s\n", msg.Username)
-					gs.safeWriteJSON(ServerMessage{Type: "auth_success", Success: "Account created! Please login."})
+					gs.sendMsg(pb.ToProtoServerMessage("auth_success", nil, nil, nil, nil, nil, "", "Account created! Please login.", 0))
+				}
+				continue
+			}
+
+			if msg.Action == "submit_feedback" {
+				log.Printf("📩 Feedback received from %s: %s\n", msg.Username, msg.Feedback)
+				_, err := game.DB.Exec("INSERT INTO feedback (username, message) VALUES (?, ?)", msg.Username, msg.Feedback)
+				if err != nil {
+					log.Printf("❌ Error saving feedback: %v\n", err)
+				} else {
+					// Trigger Feishu notification
+					go notifyFeishu(msg.Username, msg.Feedback)
+					gs.sendMsg(pb.ToProtoServerMessage("state", nil, nil, nil, nil, nil, "", "Thank you for your feedback!", 0))
 				}
 				continue
 			}
 
 			if msg.Action == "ping" {
-				gs.safeWriteJSON(ServerMessage{Type: "pong"})
+				gs.sendMsg(pb.ToProtoServerMessage("pong", nil, nil, nil, nil, nil, "", "", 0))
 				continue
 			}
 
@@ -931,10 +991,7 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			// Trigger immediate state update for UI responsiveness
 			if gs.match == nil && !gs.searching {
 				state := gs.getGameState()
-				gs.safeWriteJSON(ServerMessage{
-					Type:  "state",
-					State: &state,
-				})
+				gs.sendMsg(pb.ToProtoServerMessage("state", nil, &state, nil, nil, nil, "", "", 0))
 			}
 		}
 	}()
@@ -949,46 +1006,83 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		gs.update()
+		changed := gs.update()
 
-		state := gs.getGameState()
-		msg := ServerMessage{
-			Type:  "state",
-			State: &state,
+		if changed || gs.userUpdated || gs.lbUpdated {
+			state := gs.getGameState()
+			var leaderboard []game.LeaderboardEntry
+			var winRates []game.WinRateEntry
+			var user *game.User
+
+			if gs.userUpdated {
+				user = gs.user
+				gs.userUpdated = false
+			}
+			if gs.lbUpdated {
+				leaderboard = lbManager.GetEntries()
+				winRates = lbManager.GetWinRateEntries()
+				gs.lbUpdated = false
+			}
+
+			err := gs.sendMsg(pb.ToProtoServerMessage("state", nil, &state, leaderboard, winRates, user, "", "", 0))
+			if err != nil {
+				log.Println("Write error:", err)
+				return
+			}
+			// Clear one-shot effects after sending
+			gs.game.HitPoints = nil
+			gs.game.ScoreEvents = nil
+			gs.game.Message = ""
+			gs.game.MessageType = ""
 		}
-		if gs.userUpdated {
-			msg.User = gs.user
-			gs.userUpdated = false
-		}
-		if gs.lbUpdated {
-			msg.Leaderboard = lbManager.GetEntries()
-			msg.WinRates = lbManager.GetWinRateEntries()
-			gs.lbUpdated = false
-		}
-		err := gs.safeWriteJSON(msg)
-		if err != nil {
-			log.Println("Write error:", err)
-			return
-		}
-		// Clear one-shot effects after sending
-		gs.game.HitPoints = nil
 	}
 }
 
 func main() {
 	flag.Parse()
+
+	// Load environment variables
+	if err := godotenv.Load(); err != nil {
+		log.Println("⚠️  No .env file found, relying on system environment variables")
+	}
+
 	game.InitDB()
 
 	// Serve static files
 	fs := http.FileServer(http.Dir("web/static"))
 	http.Handle("/", fs)
 
+	// Single Source of Truth: serve the proto file to the frontend from its server-side home
+	http.HandleFunc("/proto/snake.proto", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "pkg/proto/snake.proto")
+	})
+
 	// WebSocket endpoint
 	http.HandleFunc("/ws", handleWebSocket)
 
 	port := ":8080"
 	log.Printf("🚀 Snake Game Web Server starting on http://localhost%s\n", port)
-	log.Println("📱 Open your browser and visit: http://localhost:8080")
+	http.HandleFunc("/admin/feedback", func(w http.ResponseWriter, r *http.Request) {
+		// Simple basic security: checking for a secret query param or just simple list
+		// In production, you'd want real auth here.
+		rows, err := game.DB.Query("SELECT username, message, created_at FROM feedback ORDER BY created_at DESC LIMIT 50")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		defer rows.Close()
 
-	log.Fatal(http.ListenAndServe(port, nil))
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		fmt.Fprintf(w, "<html><head><title>Admin - Feedback</title><style>body{font-family:sans-serif;background:#1a1a2e;color:#fff;padding:20px;} table{width:100%%;border-collapse:collapse;} th,td{border:1px solid #444;padding:12px;text-align:left;} th{background:#333;}</style></head><body>")
+		fmt.Fprintf(w, "<h1>📩 Recent User Feedback</h1><table><tr><th>Time</th><th>User</th><th>Message</th></tr>")
+		for rows.Next() {
+			var user, msg, timeStr string
+			rows.Scan(&user, &msg, &timeStr)
+			fmt.Fprintf(w, "<tr><td>%s</td><td><strong>%s</strong></td><td>%s</td></tr>", timeStr, user, msg)
+		}
+		fmt.Fprintf(w, "</table></body></html>")
+	})
+
+	log.Println("Server starting on :8080")
+	log.Fatal(http.ListenAndServe(":8080", nil))
 }

@@ -22,8 +22,10 @@ A professional, high-performance Snake game engine written in Go. Features a hig
   - **Battle**: High-stakes match against the AI Competitor.
   - **P2P Battle**: Face off against other humans in real-time.
 - 💾 **Robust Persistence**: SQLite-backed user accounts, global leaderboards, and match history.
-- ⚡ **Performance**: 16ms BaseTick (60 FPS) with centralized ONNX inference queue (<1.5ms latency).
+- ⚡ **Performance**: 16ms BaseTick (60 FPS) with centralized ONNX inference queue.
+- 📡 **Protobuf Communication**: Binary protocol reducing bandwidth by **80%** compared to JSON.
 - 📼 **Data Pipeline**: Automatic frame recording to `.jsonl` for offline AI training.
+- 📩 **Feedback Loop**: Integrated user feedback system with real-time **Feishu/Lark** notifications.
 
 ---
 
@@ -66,13 +68,23 @@ go mod tidy
 # Visit http://localhost:8080
 go run ./cmd/webserver
 
-# B. Run Classic Terminal Version
-go run ./cmd/snake
-
 # C. Run Replay Viewer (Re-watch recorded matches)
 # Visit http://localhost:8081
 go run ./cmd/replay
 ```
+
+### 3. Configuration (.env)
+
+The project uses a `.env` file for sensitive settings. Copy the template and fill in your details:
+
+```bash
+# Example .env content
+FEISHU_WEBHOOK_URL=https://open.feishu.cn/open-apis/bot/v2/hook/...
+```
+
+### 4. Admin Tools
+
+Visit `http://localhost:8080/admin/feedback` to view user feedback (requires server to be running).
 
 ### 2. Docker Deployment (Cloud Ready)
 

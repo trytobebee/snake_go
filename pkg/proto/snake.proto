@@ -1,0 +1,115 @@
+syntax = "proto3";
+
+package snake;
+option go_package = "github.com/trytobebee/snake_go/pkg/proto";
+
+message Point {
+  int32 x = 1;
+  int32 y = 2;
+}
+
+message FoodInfo {
+  Point pos = 1;
+  int32 foodType = 2;
+  int32 remainingSeconds = 3;
+}
+
+message Obstacle {
+  repeated Point points = 1;
+  double duration = 2;
+}
+
+message Fireball {
+  Point pos = 1;
+  Point dir = 2;
+  string owner = 3;
+}
+
+message ScoreEvent {
+  Point pos = 1;
+  int32 amount = 2;
+  string label = 3;
+}
+
+message LeaderboardEntry {
+  string name = 1;
+  int32 score = 2;
+  string date = 3; // ISO string
+  string difficulty = 4;
+  string mode = 5;
+}
+
+message WinRateEntry {
+  string name = 1;
+  double win_rate = 2;
+  int32 total_wins = 3;
+  int32 total_games = 4;
+}
+
+message User {
+  string username = 1;
+  int32 best_score = 2;
+  int32 total_games = 3;
+  int32 total_wins = 4;
+  string created_at = 5; // ISO string
+}
+
+message GameStateSnapshot {
+  repeated Point snake = 1;
+  repeated FoodInfo foods = 2;
+  int32 score = 3;
+  int32 foodEaten = 4;
+  double eatingSpeed = 5;
+  bool started = 6;
+  bool gameOver = 7;
+  bool paused = 8;
+  bool boosting = 9;
+  bool autoPlay = 10;
+  string difficulty = 11;
+  string message = 12;
+  string messageType = 13;
+  Point crashPoint = 14;
+  repeated Obstacle obstacles = 15;
+  repeated Fireball fireballs = 16;
+  repeated Point hitPoints = 17;
+  repeated Point aiSnake = 18;
+  int32 aiScore = 19;
+  int32 timeRemaining = 20;
+  string winner = 21;
+  bool aiStunned = 22;
+  bool playerStunned = 23;
+  string mode = 24;
+  repeated ScoreEvent scoreEvents = 25;
+  bool berserker = 26;
+  bool isPVP = 27;
+  string p1Name = 28;
+  string p2Name = 29;
+}
+
+message GameConfig {
+  int32 width = 1;
+  int32 height = 2;
+  int32 gameDuration = 3;
+  int32 fireballCooldown = 4;
+}
+
+message ServerMessage {
+  string type = 1;
+  GameConfig config = 2;
+  GameStateSnapshot state = 3;
+  repeated LeaderboardEntry leaderboard = 4;
+  repeated WinRateEntry win_rates = 5;
+  User user = 6;
+  string error = 7;
+  string success = 8;
+  int32 sessionCount = 9;
+}
+
+message ClientMessage {
+  string action = 1;
+  string name = 2;
+  string username = 3;
+  string password = 4;
+  string mode = 5;
+  string feedback = 6;
+}

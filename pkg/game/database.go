@@ -51,6 +51,12 @@ func createTables() {
 			mode TEXT,
 			difficulty TEXT
 		)`,
+		`CREATE TABLE IF NOT EXISTS feedback (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			username TEXT,
+			message TEXT,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`,
 	}
 
 	for _, query := range queries {

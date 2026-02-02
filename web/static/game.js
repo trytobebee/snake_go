@@ -62,14 +62,45 @@ export class SnakeGameClient {
         this.isMatching = false;
 
         // Start systems
-        this.setupWebSocket();
-        this.setupKeyboard();
-        this.setupMobileControls();
-        this.setupDifficulty();
-        this.setupAutoPlay();
-        this.setupMode();
+        this.protoRoot = null;
+        this.ServerMessage = null;
+        this.ClientMessage = null;
+
+        this.loadProtos().then(() => {
+            console.log("✅ Protobuf definitions loaded");
+            this.setupWebSocket();
+            this.setupKeyboard();
+            this.setupMobileControls();
+            this.setupDifficulty();
+            this.setupAutoPlay();
+            this.setupMode();
+        }).catch(err => {
+            console.error("❌ Failed to load Protobuf:", err);
+            this.updateConnectionStatus('error');
+        });
+
         this.startAnimationLoop();
     }
+
+    async loadProtos() {
+        return new Promise((resolve, reject) => {
+            protobuf.load("proto/snake.proto", (err, root) => {
+                if (err) return reject(err);
+                this.protoRoot = root;
+                this.ServerMessage = root.lookupType("snake.ServerMessage");
+                this.ClientMessage = root.lookupType("snake.ClientMessage");
+                resolve();
+            });
+        });
+    }
+
+    sendMessage(action, extra = {}) {
+        if (!this.ws || this.ws.readyState !== WebSocket.OPEN || !this.ClientMessage) return;
+        const msg = { action, ...extra };
+        const buffer = this.ClientMessage.encode(this.ClientMessage.create(msg)).finish();
+        this.ws.send(buffer);
+    }
+
 
     initUIElements() {
         this.scoreEl = document.getElementById('score');
@@ -107,14 +138,57 @@ export class SnakeGameClient {
         if (this.btnLogin) this.btnLogin.onclick = () => this.handleAuth('login');
         if (this.btnRegister) this.btnRegister.onclick = () => this.handleAuth('register');
 
+        // Feedback Elements
+        this.feedbackTrigger = document.getElementById('feedback-trigger');
+        this.feedbackOverlay = document.getElementById('feedbackOverlay');
+        this.feedbackText = document.getElementById('feedbackText');
+        this.btnSendFeedback = document.getElementById('btnSendFeedback');
+        this.btnCancelFeedback = document.getElementById('btnCancelFeedback');
+
+        if (this.feedbackTrigger) {
+            this.feedbackTrigger.onclick = () => {
+                this.feedbackOverlay.classList.remove('hidden');
+                this.feedbackOverlay.style.opacity = '1';
+                this.feedbackOverlay.style.visibility = 'visible';
+                this.feedbackOverlay.style.pointerEvents = 'auto';
+            };
+        }
+
+        if (this.btnCancelFeedback) {
+            this.btnCancelFeedback.onclick = () => {
+                this.feedbackOverlay.classList.add('hidden');
+                this.feedbackOverlay.style.opacity = '0';
+                this.feedbackOverlay.style.visibility = 'hidden';
+                this.feedbackOverlay.style.pointerEvents = 'none';
+            };
+        }
+
+        if (this.btnSendFeedback) {
+            this.btnSendFeedback.onclick = () => {
+                const text = this.feedbackText.value.trim();
+                if (text) {
+                    this.sendMessage('submit_feedback', {
+                        username: this.currentUser ? this.currentUser.username : 'anonymous',
+                        feedback: text
+                    });
+                    this.feedbackText.value = '';
+                    this.feedbackOverlay.classList.add('hidden');
+                    this.feedbackOverlay.style.opacity = '0';
+                    this.feedbackOverlay.style.visibility = 'hidden';
+                    this.feedbackOverlay.style.pointerEvents = 'none';
+                }
+            };
+        }
+
         if (this.cancelMatchBtn) {
             this.cancelMatchBtn.onclick = (e) => {
                 e.stopPropagation(); // Prevent starting game via overlay click
                 if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-                    this.ws.send(JSON.stringify({ action: 'cancel_match' }));
+                    this.sendMessage('cancel_match');
                     this.isMatching = false;
                     this.updateOverlay();
                 }
+
             };
         }
 
@@ -204,12 +278,12 @@ export class SnakeGameClient {
     fire() {
         const now = Date.now();
         if (now - this.lastFireTime < this.fireCooldown) return;
-        if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
-        this.ws.send(JSON.stringify({ action: 'fire' }));
+        this.sendMessage('fire');
         this.sounds.playFire('cannon');
         this.triggerHaptic(20);
         this.lastFireTime = now;
     }
+
 
     startAnimationLoop() {
         const frame = () => {
@@ -260,9 +334,11 @@ export class SnakeGameClient {
     setupWebSocket() {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         this.ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
+        this.ws.binaryType = 'arraybuffer';
 
         this.ws.onopen = () => {
             this.updateConnectionStatus('connected');
+
             // Attempt auto-login if credentials exist
             const saved = localStorage.getItem('snake_auth');
             if (saved) {
@@ -270,11 +346,12 @@ export class SnakeGameClient {
                     const creds = JSON.parse(atob(saved));
                     this.authMessage.textContent = "Auto-logging in...";
                     this.authMessage.className = "success";
-                    this.ws.send(JSON.stringify({
-                        action: 'login',
+                    this.sendMessage('login', {
                         username: creds.username,
                         password: creds.password
-                    }));
+                    });
+
+
                 } catch (e) {
                     localStorage.removeItem('snake_auth');
                 }
@@ -284,7 +361,10 @@ export class SnakeGameClient {
             this.pingInterval = setInterval(() => this.sendPing(), 5000);
         };
         this.ws.onmessage = (event) => {
-            const msg = JSON.parse(event.data);
+            if (!this.ServerMessage) return;
+            const data = new Uint8Array(event.data);
+            const msg = this.ServerMessage.decode(data);
+
             if (msg.type === 'config') {
                 this.handleConfig(msg.config);
             } else if (msg.type === 'state') {
@@ -312,6 +392,8 @@ export class SnakeGameClient {
                 this.updatePlayerCount(msg.sessionCount);
             } else if (msg.type === 'pong') {
                 this.handlePong();
+            } else if (msg.type === 'error') {
+                alert(msg.error || "A server error occurred.");
             }
         };
         this.ws.onerror = () => {
@@ -443,12 +525,12 @@ export class SnakeGameClient {
             this.onAuthError("Missing username or password");
             return;
         }
-        this.ws.send(JSON.stringify({
-            action: type,
+        this.sendMessage(type, {
             username: username,
             password: password
-        }));
+        });
     }
+
 
     onAuthSuccess(msg) {
         if (msg.user) {
@@ -746,8 +828,8 @@ export class SnakeGameClient {
             if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
             if (e.ctrlKey || e.metaKey || e.altKey) return;
 
-            // Ignore game controls if typing in an input field
-            if (e.target.tagName === 'INPUT') return;
+            // Ignore game controls if typing in an input field or textarea
+            if (['INPUT', 'TEXTAREA'].includes(e.target.tagName)) return;
 
             const key = e.key.toLowerCase();
             const actionMap = {
@@ -759,12 +841,14 @@ export class SnakeGameClient {
             if (key === 'f' || key === 'enter') { this.fire(); return; }
             if (action) {
                 e.preventDefault();
-                const msg = { action };
+                let extra = {};
                 if (action === 'auto') {
-                    msg.mode = this.autoModeSelect ? this.autoModeSelect.value : 'heuristic';
+                    extra.mode = this.autoModeSelect ? this.autoModeSelect.value : 'heuristic';
                 }
-                this.ws.send(JSON.stringify(msg));
+                this.sendMessage(action, extra);
                 if (['up', 'down', 'left', 'right'].includes(action)) {
+
+
                     this.sounds.playMove();
                     this.triggerHaptic(15);
                 }
@@ -781,13 +865,14 @@ export class SnakeGameClient {
             const start = (e) => {
                 e.preventDefault();
                 if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
-                this.ws.send(JSON.stringify({ action }));
+                this.sendMessage(action);
                 this.sounds.playMove();
                 if (action !== 'pause') {
                     this.pressTimer = setInterval(() => {
-                        if (this.ws.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify({ action }));
+                        this.sendMessage(action);
                     }, 80);
                 }
+
             };
             const end = () => { if (this.pressTimer) { clearInterval(this.pressTimer); this.pressTimer = null; } };
             btn.addEventListener('touchstart', start); btn.addEventListener('touchend', end);
@@ -798,9 +883,10 @@ export class SnakeGameClient {
         const handleStartRestart = () => {
             if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
             if (this.isMatching) return; // Prevent clicking while matching
-            if (this.gameState?.gameOver) this.ws.send(JSON.stringify({ action: 'restart' }));
-            else if (this.gameState && !this.gameState.started) this.ws.send(JSON.stringify({ action: 'start' }));
+            if (this.gameState?.gameOver) this.sendMessage('restart');
+            else if (this.gameState && !this.gameState.started) this.sendMessage('start');
         };
+
         this.gameOverlay.addEventListener('click', handleStartRestart);
         this.canvas.addEventListener('click', handleStartRestart);
     }
@@ -810,18 +896,20 @@ export class SnakeGameClient {
             document.getElementById(`diff-${d}`)?.addEventListener('click', () => {
                 if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
                 if (!this.gameState?.started || this.gameState?.gameOver) {
-                    this.ws.send(JSON.stringify({ action: `diff_${d}` }));
+                    this.sendMessage(`diff_${d}`);
                 } else {
                     this.showTempMessage("Can't change difficulty during game!");
                 }
             });
+
         });
 
 
         const berserkerBtn = document.getElementById('berserker-toggle');
         berserkerBtn?.addEventListener('click', () => {
-            if (this.ws && this.ws.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify({ action: 'toggleBerserker' }));
+            this.sendMessage('toggleBerserker');
         });
+
     }
 
     setupAutoPlay() {
@@ -829,18 +917,20 @@ export class SnakeGameClient {
         document.getElementById('btn-auto')?.addEventListener('click', () => {
             if (this.ws && this.ws.readyState === WebSocket.OPEN) {
                 const mode = this.autoModeSelect ? this.autoModeSelect.value : 'heuristic';
-                this.ws.send(JSON.stringify({ action: 'auto', mode: mode }));
+                this.sendMessage('auto', { mode: mode });
             }
         });
+
     }
 
     setupMode() {
         const setMode = (mode) => {
             if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-                this.ws.send(JSON.stringify({ action: `mode_${mode}` }));
+                this.sendMessage(`mode_${mode}`);
                 this.showTempMessage(`${mode.charAt(0).toUpperCase() + mode.slice(1)} Mode Activated`);
             }
         };
+
         document.getElementById('mode-battle').onclick = () => setMode('battle');
         document.getElementById('mode-zen').onclick = () => setMode('zen');
         document.getElementById('mode-pvp').onclick = () => {
@@ -853,7 +943,7 @@ export class SnakeGameClient {
 
             if (this.ws && this.ws.readyState === WebSocket.OPEN) {
                 this.isMatching = true;
-                this.ws.send(JSON.stringify({ action: 'find_match' }));
+                this.sendMessage('find_match');
                 this.showTempMessage("Searching for opponent...");
                 this.updateOverlay(); // Update UI immediately
             }
@@ -886,9 +976,10 @@ export class SnakeGameClient {
     sendPing() {
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
             this.pingStartTime = performance.now();
-            this.ws.send(JSON.stringify({ action: 'ping' }));
+            this.sendMessage('ping');
         }
     }
+
 
     handlePong() {
         if (this.pingStartTime) {

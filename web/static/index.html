@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>🐍 Snake Game - Web Version</title>
-    <link rel="stylesheet" href="style.css?v=2.5">
+    <link rel="stylesheet" href="style.css?v=5.1">
 </head>
 
 <body>
@@ -218,9 +218,29 @@
             <span class="ping-display" id="pingDisplay">Ping: -- ms</span>
             <span class="player-count" id="totalPlayers">👥 0 Players</span>
         </div>
+
+        <!-- Feedback UI -->
+        <div class="feedback-trigger" id="feedback-trigger">
+            <span>💬 Feedback</span>
+        </div>
+
+        <div class="auth-overlay hidden" id="feedbackOverlay">
+            <div class="auth-content feedback-content">
+                <h2>📣 YOUR FEEDBACK</h2>
+                <p>Help us improve the game!</p>
+                <textarea id="feedbackText" placeholder="Found a bug? Have an idea? Write here..."
+                    maxlength="500"></textarea>
+                <div class="auth-actions">
+                    <button id="btnSendFeedback">Submit</button>
+                    <button id="btnCancelFeedback" class="secondary">Cancel</button>
+                </div>
+            </div>
+        </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/protobufjs@7.2.4/dist/protobuf.min.js"></script>
     <script type="module" src="game.js?v=2.4"></script>
+
 </body>
 
 </html>

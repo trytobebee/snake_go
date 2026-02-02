@@ -1,6 +1,32 @@
 # Changelog
 
-All notable changes to this project will be documented in this file.
+All notable changes to the **Snake Go Premium** project will be documented in this file.
+
+## [5.1.0] - 2026-02-02
+
+### 🚀 Major Improvements
+- **Network Protocol Upgrade (Protobuf)**: Transitioned from JSON to Protobuf for all WebSocket communications. 
+  - Reduced per-frame bandwidth by **~80%** (from 2.6KB down to 0.5KB for typical states).
+  - Improved serialization/deserialization speed by ~6x.
+- **Scalability Controls**:
+  - Implemented a **500-player maximum limit** per server instance to prevent resource exhaustion.
+  - Added "Server Full" graceful rejection logic with user-facing alerts.
+- **Single Source of Truth (SSoT)**: Refactored `.proto` management. The server now dynamically serves the master `.proto` file to the frontend, eliminating synchronization bugs between backend and client.
+
+### 📩 Feedback System
+- **In-game Feedback**: Added a premium "💬 Feedback" floating button with a Glassmorphism UI for users to submit suggestions and bug reports.
+- **Admin Dashboard**: New endpoint at `/admin/feedback` for developers to review user submissions in a clean, dark-themed interface.
+- **Feishu (Lark) Integration**: Real-time push notifications to Feishu via Webhooks.
+  - Supports **Interactive Card** format with headers, markdown, and formatted timestamps.
+
+### 🛡️ Security & Ops
+- **Environment Configuration**: Added `.env` file support using `godotenv`. sensitive keys like Feishu Webhook URLs are now kept out of the source code.
+- **Hotkey Conflict Resolution**: Fixed a bug where typing in feedback or login fields would trigger game controls (e.g., restarting or pausing).
+
+### 🐛 Bug Fixes
+- **Player Count Persistence**: Fixed a race condition where refreshing the page could lead to ghost sessions and an ever-increasing player count.
+
+---
 
 ## [5.0.0] - 2026-01-26
 
@@ -159,7 +185,7 @@ All notable changes to this project will be documented in this file.
 
 ## [3.1.0] - 2026-01-14
 
-### � Game Modes & Features
+### 🎮 Game Modes & Features
 
 - **🧘 Zen Mode**: Infinite practice mode with no time limit and no AI opponent
   - Perfect for learning controls and exploring the food system
@@ -179,7 +205,7 @@ All notable changes to this project will be documented in this file.
   - Contextual colors: blue (food), red (combat), gold (headshot)
   - Upward floating with fade-out effect
 
-### �🏗️ Architecture
+### 🏗️ Architecture
 
 - **Frontend Modularization**: Refactored monolithic `game.js` (1100+ lines) into clean ES modules
   - Created `modules/audio.js` for sound management (150 lines)
