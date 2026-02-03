@@ -93,6 +93,7 @@ type GameServer struct {
 	// Connection management
 	writeMu sync.Mutex
 	sendMsg func(v *pb.ServerMessage) error
+	close   func() // Function to close the connection
 }
 
 // ... (ServerMessage, ClientMessage structs unchanged)
@@ -853,7 +854,8 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	log.Println("New WebSocket connection from:", r.RemoteAddr)
 	// Generate a short unique ID for this connection
-	connID := fmt.Sprintf("%d", time.Now().UnixNano()%10000)
+	// Generate a unique ID for this connection
+	connID := fmt.Sprintf("%x", time.Now().UnixNano())
 
 	gs := NewGameServer(connID)
 
@@ -866,6 +868,10 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			return err
 		}
 		return conn.WriteMessage(websocket.BinaryMessage, data)
+	}
+
+	gs.close = func() {
+		conn.Close()
 	}
 
 	// Check for player limit
@@ -921,8 +927,12 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	initialState := gs.getGameState()
 	gs.sendMsg(pb.ToProtoServerMessage("state", nil, &initialState, nil, nil, nil, "", "", 0))
 
+	// Signal for loop termination
+	done := make(chan struct{})
+
 	// Input handling goroutine
 	go func() {
+		defer close(done)
 		for {
 			_, data, err := conn.ReadMessage()
 			if err != nil {
@@ -945,6 +955,19 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 					gs.sendMsg(pb.ToProtoServerMessage("auth_error", nil, nil, nil, nil, nil, err.Error(), "", 0))
 				} else {
 					log.Printf("✅ Login success: %s\n", msg.Username)
+
+					// Kick old connection for this user if it exists
+					clientsMu.Lock()
+					for id, c := range clients {
+						if c.user != nil && c.user.Username == msg.Username && id != connID {
+							log.Printf("⚠️ Kicking old session for user: %s (connID: %s)\n", msg.Username, id)
+							if c.close != nil {
+								c.close() // This will cause their ReadMessage to fail and trigger defer
+							}
+						}
+					}
+					clientsMu.Unlock()
+
 					gs.user = user
 					gs.sendMsg(pb.ToProtoServerMessage("auth_success", nil, nil, nil, nil, user, "", "", 0))
 				}
@@ -997,43 +1020,48 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	// Game loop
-	for range gs.ticker.C {
-		// If in match, P1's runPVPGame goroutine handles the updates and broadcasts.
-		if gs.match != nil {
-			// CRITICAL: Even in match mode, we must sync the LOCAL boosting state of this connection
-			// to the shared game object, otherwise individual player boosting won't work.
-			gs.updateBoostingOnly()
-			continue
-		}
-
-		changed := gs.update()
-
-		if changed || gs.userUpdated || gs.lbUpdated {
-			state := gs.getGameState()
-			var leaderboard []game.LeaderboardEntry
-			var winRates []game.WinRateEntry
-			var user *game.User
-
-			if gs.userUpdated {
-				user = gs.user
-				gs.userUpdated = false
-			}
-			if gs.lbUpdated {
-				leaderboard = lbManager.GetEntries()
-				winRates = lbManager.GetWinRateEntries()
-				gs.lbUpdated = false
+	for {
+		select {
+		case <-done:
+			return
+		case <-gs.ticker.C:
+			// If in match, P1's runPVPGame goroutine handles the updates and broadcasts.
+			if gs.match != nil {
+				// CRITICAL: Even in match mode, we must sync the LOCAL boosting state of this connection
+				// to the shared game object, otherwise individual player boosting won't work.
+				gs.updateBoostingOnly()
+				continue
 			}
 
-			err := gs.sendMsg(pb.ToProtoServerMessage("state", nil, &state, leaderboard, winRates, user, "", "", 0))
-			if err != nil {
-				log.Println("Write error:", err)
-				return
+			changed := gs.update()
+
+			if changed || gs.userUpdated || gs.lbUpdated {
+				state := gs.getGameState()
+				var leaderboard []game.LeaderboardEntry
+				var winRates []game.WinRateEntry
+				var user *game.User
+
+				if gs.userUpdated {
+					user = gs.user
+					gs.userUpdated = false
+				}
+				if gs.lbUpdated {
+					leaderboard = lbManager.GetEntries()
+					winRates = lbManager.GetWinRateEntries()
+					gs.lbUpdated = false
+				}
+
+				err := gs.sendMsg(pb.ToProtoServerMessage("state", nil, &state, leaderboard, winRates, user, "", "", 0))
+				if err != nil {
+					log.Println("Write error:", err)
+					return
+				}
+				// Clear one-shot effects after sending
+				gs.game.HitPoints = nil
+				gs.game.ScoreEvents = nil
+				gs.game.Message = ""
+				gs.game.MessageType = ""
 			}
-			// Clear one-shot effects after sending
-			gs.game.HitPoints = nil
-			gs.game.ScoreEvents = nil
-			gs.game.Message = ""
-			gs.game.MessageType = ""
 		}
 	}
 }
