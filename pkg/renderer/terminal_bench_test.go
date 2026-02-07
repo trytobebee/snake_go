@@ -55,8 +55,8 @@ func BenchmarkStringBuilderRender(b *testing.B) {
 	os.Stdout = nil
 	defer func() { os.Stdout = old }()
 
-	g := game.NewGame()
-	renderer := NewTerminalRenderer()
+	g := game.NewGame(config.StandardWidth, config.StandardHeight)
+	renderer := NewTerminalRenderer(config.StandardWidth, config.StandardHeight)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -71,7 +71,7 @@ func BenchmarkNaiveRender(b *testing.B) {
 	os.Stdout = nil
 	defer func() { os.Stdout = old }()
 
-	g := game.NewGame()
+	g := game.NewGame(config.StandardWidth, config.StandardHeight)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -86,19 +86,19 @@ func naiveRender(g *game.Game, boosting bool) {
 	cmd.Stdout = os.Stdout
 	cmd.Run()
 
-	board := make([][]int, config.Height)
+	board := make([][]int, g.Height)
 	for i := range board {
-		board[i] = make([]int, config.Width)
+		board[i] = make([]int, g.Width)
 	}
 
 	// Draw walls
-	for x := 0; x < config.Width; x++ {
+	for x := 0; x < g.Width; x++ {
 		board[0][x] = cellWall
-		board[config.Height-1][x] = cellWall
+		board[g.Height-1][x] = cellWall
 	}
-	for y := 0; y < config.Height; y++ {
+	for y := 0; y < g.Height; y++ {
 		board[y][0] = cellWall
-		board[y][config.Width-1] = cellWall
+		board[y][g.Width-1] = cellWall
 	}
 
 	// Draw snake
@@ -149,7 +149,7 @@ func naiveRender(g *game.Game, boosting bool) {
 
 // BenchmarkMemoryAllocation benchmarks memory allocation (pre-allocated vs new each time)
 func BenchmarkPreAllocatedBoard(b *testing.B) {
-	renderer := NewTerminalRenderer()
+	renderer := NewTerminalRenderer(config.StandardWidth, config.StandardHeight)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -166,9 +166,9 @@ func BenchmarkNewBoardEachTime(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		// Allocate new board each time (OLD WAY)
-		board := make([][]int, config.Height)
+		board := make([][]int, config.StandardHeight)
 		for i := range board {
-			board[i] = make([]int, config.Width)
+			board[i] = make([]int, config.StandardWidth)
 		}
 		// Reset it
 		for y := range board {
@@ -217,8 +217,8 @@ func BenchmarkBytesBuffer(b *testing.B) {
 
 // TestRenderingPerformance is a visual test showing timing differences
 func TestRenderingPerformance(t *testing.T) {
-	g := game.NewGame()
-	renderer := NewTerminalRenderer()
+	g := game.NewGame(config.StandardWidth, config.StandardHeight)
+	renderer := NewTerminalRenderer(config.StandardWidth, config.StandardHeight)
 
 	// Test optimized rendering
 	start := time.Now()

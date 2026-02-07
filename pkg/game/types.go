@@ -109,6 +109,8 @@ type Player struct {
 
 // Game represents the main game state
 type Game struct {
+	Width             int
+	Height            int
 	Players           []*Player
 	Foods             []Food       // Multiple food items
 	LastScore         int          `json:"-"`           // Total score from previous frame (for reward calc - primarily for P1)

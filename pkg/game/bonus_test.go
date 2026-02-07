@@ -10,10 +10,10 @@ import (
 func TestPositionBonus(t *testing.T) {
 	// Test corner positions (should get +100)
 	corners := []Point{
-		{X: 1, Y: 1},                                // Top-left
-		{X: config.Width - 2, Y: 1},                 // Top-right
-		{X: 1, Y: config.Height - 2},                // Bottom-left
-		{X: config.Width - 2, Y: config.Height - 2}, // Bottom-right
+		{X: 1, Y: 1},                                                // Top-left
+		{X: config.StandardWidth - 2, Y: 1},                         // Top-right
+		{X: 1, Y: config.StandardHeight - 2},                        // Bottom-left
+		{X: config.StandardWidth - 2, Y: config.StandardHeight - 2}, // Bottom-right
 	}
 
 	for _, pos := range corners {
@@ -21,12 +21,12 @@ func TestPositionBonus(t *testing.T) {
 			Pos:      pos,
 			FoodType: FoodRed,
 		}
-		bonus := food.GetPositionBonus(config.Width, config.Height)
+		bonus := food.GetPositionBonus(config.StandardWidth, config.StandardHeight)
 		if bonus != 100 {
 			t.Errorf("Corner position %v should have +100 bonus, got %d", pos, bonus)
 		}
 
-		msg := food.GetBonusMessage(config.Width, config.Height)
+		msg := food.GetBonusMessage(config.StandardWidth, config.StandardHeight)
 		if msg == "" {
 			t.Errorf("Corner position should have congratulatory message")
 		}
@@ -35,10 +35,10 @@ func TestPositionBonus(t *testing.T) {
 
 	// Test edge positions (should get +30)
 	edges := []Point{
-		{X: 10, Y: 1},                 // Top edge
-		{X: 10, Y: config.Height - 2}, // Bottom edge
-		{X: 1, Y: 10},                 // Left edge
-		{X: config.Width - 2, Y: 10},  // Right edge
+		{X: 10, Y: 1},                         // Top edge
+		{X: 10, Y: config.StandardHeight - 2}, // Bottom edge
+		{X: 1, Y: 10},                         // Left edge
+		{X: config.StandardWidth - 2, Y: 10},  // Right edge
 	}
 
 	for _, pos := range edges {
@@ -46,12 +46,12 @@ func TestPositionBonus(t *testing.T) {
 			Pos:      pos,
 			FoodType: FoodBlue,
 		}
-		bonus := food.GetPositionBonus(config.Width, config.Height)
+		bonus := food.GetPositionBonus(config.StandardWidth, config.StandardHeight)
 		if bonus != 30 {
 			t.Errorf("Edge position %v should have +30 bonus, got %d", pos, bonus)
 		}
 
-		msg := food.GetBonusMessage(config.Width, config.Height)
+		msg := food.GetBonusMessage(config.StandardWidth, config.StandardHeight)
 		if msg == "" {
 			t.Errorf("Edge position should have congratulatory message")
 		}
@@ -64,12 +64,12 @@ func TestPositionBonus(t *testing.T) {
 		Pos:      normal,
 		FoodType: FoodPurple,
 	}
-	bonus := food.GetPositionBonus(config.Width, config.Height)
+	bonus := food.GetPositionBonus(config.StandardWidth, config.StandardHeight)
 	if bonus != 0 {
 		t.Errorf("Normal position %v should have 0 bonus, got %d", normal, bonus)
 	}
 
-	msg := food.GetBonusMessage(config.Width, config.Height)
+	msg := food.GetBonusMessage(config.StandardWidth, config.StandardHeight)
 	if msg != "" {
 		t.Errorf("Normal position should have no message, got '%s'", msg)
 	}
@@ -97,20 +97,20 @@ func TestTotalScore(t *testing.T) {
 				Pos:      tc.pos,
 				FoodType: tc.foodType,
 			}
-			score := food.GetTotalScore(config.Width, config.Height)
+			score := food.GetTotalScore(config.StandardWidth, config.StandardHeight)
 			if score != tc.expected {
 				t.Errorf("%s: expected %d, got %d", tc.name, tc.expected, score)
 			}
 			t.Logf("%s: %d points (base=%d, bonus=%d)",
 				tc.name, score, food.GetBaseScore(),
-				food.GetPositionBonus(config.Width, config.Height))
+				food.GetPositionBonus(config.StandardWidth, config.StandardHeight))
 		})
 	}
 }
 
 // TestMessageSystem tests the message display system
 func TestMessageSystem(t *testing.T) {
-	g := NewGame()
+	g := NewGame(config.StandardWidth, config.StandardHeight)
 
 	// Initially no message
 	if g.GetMessage() != "" {
@@ -134,7 +134,7 @@ func TestVisualIndicators(t *testing.T) {
 		Pos:      Point{X: 1, Y: 1},
 		FoodType: FoodRed,
 	}
-	emoji := cornerFood.GetEmojiWithTimer(config.Width, config.Height)
+	emoji := cornerFood.GetEmojiWithTimer(config.StandardWidth, config.StandardHeight)
 	if emoji != "🔴" {
 		t.Errorf("Corner food should show 🔴, got %s", emoji)
 	}
@@ -145,7 +145,7 @@ func TestVisualIndicators(t *testing.T) {
 		Pos:      Point{X: 1, Y: 10},
 		FoodType: FoodBlue,
 	}
-	emoji = edgeFood.GetEmojiWithTimer(config.Width, config.Height)
+	emoji = edgeFood.GetEmojiWithTimer(config.StandardWidth, config.StandardHeight)
 	if emoji != "🔵" {
 		t.Errorf("Edge food should show 🔵, got %s", emoji)
 	}
@@ -156,20 +156,20 @@ func TestVisualIndicators(t *testing.T) {
 		Pos:      Point{X: 10, Y: 10},
 		FoodType: FoodRed,
 	}
-	emoji = normalFood.GetEmojiWithTimer(config.Width, config.Height)
+	emoji = normalFood.GetEmojiWithTimer(config.StandardWidth, config.StandardHeight)
 	if emoji != "🔴" {
 		t.Errorf("Normal red food should show 🔴, got %s", emoji)
 	}
 	t.Logf("Normal food emoji: %s", emoji)
 
 	// But messages should contain trophy/star
-	msg := cornerFood.GetBonusMessage(config.Width, config.Height)
+	msg := cornerFood.GetBonusMessage(config.StandardWidth, config.StandardHeight)
 	if msg == "" || !contains(msg, "🏆") {
 		t.Errorf("Corner food message should contain 🏆, got: %s", msg)
 	}
 	t.Logf("Corner bonus message: %s", msg)
 
-	msg = edgeFood.GetBonusMessage(config.Width, config.Height)
+	msg = edgeFood.GetBonusMessage(config.StandardWidth, config.StandardHeight)
 	if msg == "" || !contains(msg, "⭐") {
 		t.Errorf("Edge food message should contain ⭐, got: %s", msg)
 	}

@@ -10,10 +10,10 @@ export class SnakeGameClient {
         this.sounds = new SoundManager();
 
         // Constants & Config
-        this.cellSize = 20;
-        this.boardWidth = 25;
-        this.boardHeight = 25;
-        this.gameDuration = 30;
+        this.cellSize = window.innerWidth > 768 ? 23 : 20; // Slightly larger for desktop
+        this.boardWidth = 38;
+        this.boardHeight = 38;
+        this.gameDuration = 60;
         this.fireCooldown = 300;
 
         // Initialize Renderer
@@ -445,6 +445,16 @@ export class SnakeGameClient {
         this.boardHeight = config.height;
         this.gameDuration = config.gameDuration;
         this.fireCooldown = config.fireballCooldown || 300;
+
+        // Finalize cellSize based on screen size and board width
+        const isDesktop = window.innerWidth > 768;
+        if (isDesktop) {
+            this.cellSize = this.boardWidth > 25 ? 22 : 30; // Scale down slightly if board is huge
+        } else {
+            this.cellSize = 20;
+        }
+        this.renderer.cellSize = this.cellSize;
+
         this.canvas.width = this.boardWidth * this.cellSize;
         this.canvas.height = this.boardHeight * this.cellSize;
     }

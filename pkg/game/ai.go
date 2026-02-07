@@ -2,8 +2,6 @@ package game
 
 import (
 	"math/rand"
-
-	"github.com/trytobebee/snake_go/pkg/config"
 )
 
 // UpdateAI decides the next move for the player snake when in AutoPlay mode
@@ -11,27 +9,37 @@ import (
 
 // GetFeatureGrid generates the 6-channel input for the Neural Network
 // Channels: 0:PlayerHead, 1:PlayerBody, 2:EnemyHead, 3:EnemyBody, 4:Food, 5:Hazard
+// FIXED: Now centers a 25x25 window on the player's head to support any board size.
 func (g *Game) GetFeatureGrid(playerIdx int) []float64 {
-	W, H := config.Width, config.Height // 25x25
-	size := W * H
+	const AISize = 25
+	size := AISize * AISize
 	grid := make([]float64, 6*size)
-
-	set := func(c, x, y int) {
-		if x >= 0 && x < W && y >= 0 && y < H {
-			grid[c*size+y*W+x] = 1.0
-		}
-	}
 
 	if playerIdx >= len(g.Players) {
 		return grid
 	}
 
 	me := g.Players[playerIdx]
+	if len(me.Snake) == 0 {
+		return grid
+	}
+
+	head := me.Snake[0]
+	// Center the 25x25 window on the head
+	offsetX := head.X - AISize/2
+	offsetY := head.Y - AISize/2
+
+	set := func(c, x, y int) {
+		relX := x - offsetX
+		relY := y - offsetY
+		if relX >= 0 && relX < AISize && relY >= 0 && relY < AISize {
+			grid[c*size+relY*AISize+relX] = 1.0
+		}
+	}
 
 	// Ch 0: Player Head
-	if len(me.Snake) > 0 {
-		set(0, me.Snake[0].X, me.Snake[0].Y)
-	}
+	set(0, head.X, head.Y)
+
 	// Ch 1: Player Body
 	if len(me.Snake) > 1 {
 		for _, p := range me.Snake[1:] {
@@ -61,7 +69,18 @@ func (g *Game) GetFeatureGrid(playerIdx int) []float64 {
 		set(4, f.Pos.X, f.Pos.Y)
 	}
 
-	// Ch 5: Hazard (Obstacles + Fireballs)
+	// Ch 5: Hazard (Obstacles + Fireballs + Wall)
+	// Add walls relative to the centered view
+	for vy := 0; vy < AISize; vy++ {
+		for vx := 0; vx < AISize; vx++ {
+			worldX := vx + offsetX
+			worldY := vy + offsetY
+			if worldX <= 0 || worldX >= g.Width-1 || worldY <= 0 || worldY >= g.Height-1 {
+				grid[5*size+vy*AISize+vx] = 1.0
+			}
+		}
+	}
+
 	for _, obs := range g.Obstacles {
 		for _, p := range obs.Points {
 			set(5, p.X, p.Y)
@@ -139,7 +158,7 @@ func (g *Game) handleNormalAIFire(p *Player) {
 	dir := p.Direction
 	for dist := 1; dist <= 5; dist++ {
 		lookAhead := Point{X: head.X + dir.X*dist, Y: head.Y + dir.Y*dist}
-		if lookAhead.X <= 0 || lookAhead.X >= config.Width-1 || lookAhead.Y <= 0 || lookAhead.Y >= config.Height-1 {
+		if lookAhead.X <= 0 || lookAhead.X >= g.Width-1 || lookAhead.Y <= 0 || lookAhead.Y >= g.Height-1 {
 			break
 		}
 
@@ -208,7 +227,7 @@ func (g *Game) CalculateBestMove(playerIdx int, snake []Point, lastMoveDir Point
 			continue
 		}
 
-		totalScore := food.GetTotalScore(config.Width, config.Height)
+		totalScore := food.GetTotalScore(g.Width, g.Height)
 		utility := float64(totalScore) / dist
 
 		if utility > maxUtility {
@@ -359,7 +378,7 @@ func (g *Game) handleAIFire(p *Player, ownerIdx int) bool {
 	// Look further for targets (up to 10 tiles)
 	for dist := 1; dist <= 10; dist++ {
 		lookAhead := Point{X: head.X + dir.X*dist, Y: head.Y + dir.Y*dist}
-		if lookAhead.X <= 0 || lookAhead.X >= config.Width-1 || lookAhead.Y <= 0 || lookAhead.Y >= config.Height-1 {
+		if lookAhead.X <= 0 || lookAhead.X >= g.Width-1 || lookAhead.Y <= 0 || lookAhead.Y >= g.Height-1 {
 			break
 		}
 
@@ -459,7 +478,7 @@ func (g *Game) countReachableSpace(start Point, ownerIdx int) int {
 			next := Point{curr.X + d.X, curr.Y + d.Y}
 
 			// Wall check
-			if next.X <= 0 || next.X >= config.Width-1 || next.Y <= 0 || next.Y >= config.Height-1 {
+			if next.X <= 0 || next.X >= g.Width-1 || next.Y <= 0 || next.Y >= g.Height-1 {
 				continue
 			}
 
@@ -476,7 +495,7 @@ func (g *Game) countReachableSpace(start Point, ownerIdx int) int {
 // It also checks for "threat zones" created by other players' heads.
 func (g *Game) isSafe(p Point, ownerIdx int) bool {
 	// 1. Boundary check
-	if p.X <= 0 || p.X >= config.Width-1 || p.Y <= 0 || p.Y >= config.Height-1 {
+	if p.X <= 0 || p.X >= g.Width-1 || p.Y <= 0 || p.Y >= g.Height-1 {
 		return false
 	}
 

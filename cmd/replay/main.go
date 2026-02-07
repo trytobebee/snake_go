@@ -158,8 +158,8 @@ func (s *ReplayServer) handleReplayWS(w http.ResponseWriter, r *http.Request) {
 	// Parse Record (First line to get config if possible, or use default)
 	// For now, send default config immediately to initialize frontend
 	defaultConfig := game.GameConfig{
-		Width:            config.Width,
-		Height:           config.Height,
+		Width:            config.StandardWidth,
+		Height:           config.StandardHeight,
 		GameDuration:     int(config.GameDuration.Seconds()),
 		FireballCooldown: int(config.FireballCooldown.Milliseconds()),
 	}

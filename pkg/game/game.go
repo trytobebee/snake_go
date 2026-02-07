@@ -9,12 +9,14 @@ import (
 	"github.com/trytobebee/snake_go/pkg/config"
 )
 
-// NewGame creates a new game instance
-func NewGame() *Game {
+// NewGame creates a new game instance with specified dimensions
+func NewGame(width, height int) *Game {
 	g := &Game{
+		Width:  width,
+		Height: height,
 		Players: []*Player{
 			{
-				Snake:       []Point{{X: config.Width / 2, Y: config.Height / 2}},
+				Snake:       []Point{{X: width / 2, Y: height / 2}},
 				Direction:   Point{X: 1, Y: 0},
 				LastMoveDir: Point{X: 1, Y: 0},
 				Name:        "Player 1",
@@ -34,7 +36,7 @@ func NewGame() *Game {
 
 	// In battle mode, add the second player (AI)
 	g.Players = append(g.Players, &Player{
-		Snake:       []Point{{X: config.Width - 2, Y: config.Height - 2}},
+		Snake:       []Point{{X: width - 2, Y: height - 2}},
 		Direction:   Point{X: -1, Y: 0},
 		LastMoveDir: Point{X: -1, Y: 0},
 		Name:        "AI",
@@ -48,6 +50,12 @@ func NewGame() *Game {
 	if err == nil {
 		g.NeuralNet = &ONNXModel{}
 		log.Println("🧠 Global AI Service (ONNX) is active for this game!")
+
+		// If board size is standard, upgrade AI to Neural by default
+		if g.Width == config.StandardWidth && g.Height == config.StandardHeight && len(g.Players) > 1 {
+			g.Players[1].Brain = &NeuralController{}
+			g.Players[1].Controller = "neural"
+		}
 	} else {
 		log.Printf("⚠️  Global AI Service Error: %v. Using Heuristic AI.\n", err)
 	}
@@ -80,8 +88,8 @@ func (g *Game) spawnOneFood() {
 	// Find position that doesn't overlap with snakes, foods or obstacles
 	for attempts := 0; attempts < 100; attempts++ {
 		pos := Point{
-			X: rand.Intn(config.Width-2) + 1,
-			Y: rand.Intn(config.Height-2) + 1,
+			X: rand.Intn(g.Width-2) + 1,
+			Y: rand.Intn(g.Height-2) + 1,
 		}
 
 		if !g.isCellEmpty(pos) {
@@ -238,7 +246,7 @@ func (g *Game) UpdatePlayer(idx int) {
 				}
 			} else {
 				// AI competitor died, reset it
-				p.Snake = []Point{{X: config.Width - 2, Y: config.Height - 2}}
+				p.Snake = []Point{{X: g.Width - 2, Y: g.Height - 2}}
 				p.Direction = Point{X: -1, Y: 0}
 				p.LastMoveDir = Point{X: -1, Y: 0}
 				g.SetMessage("🤖 AI 竞争者撞墙了！")
@@ -349,7 +357,7 @@ func (g *Game) handlePropCollision(pos Point, p *Player) {
 
 func (g *Game) checkCollisionForPlayer(idx int, p Point) bool {
 	// Wall
-	if p.X <= 0 || p.X >= config.Width-1 || p.Y <= 0 || p.Y >= config.Height-1 {
+	if p.X <= 0 || p.X >= g.Width-1 || p.Y <= 0 || p.Y >= g.Height-1 {
 		return true
 	}
 
@@ -388,7 +396,7 @@ func (g *Game) checkCollisionForPlayer(idx int, p Point) bool {
 func (g *Game) checkCollisionFair(idx int, newHeads []Point) bool {
 	p := newHeads[idx]
 	// Wall
-	if p.X <= 0 || p.X >= config.Width-1 || p.Y <= 0 || p.Y >= config.Height-1 {
+	if p.X <= 0 || p.X >= g.Width-1 || p.Y <= 0 || p.Y >= g.Height-1 {
 		return true
 	}
 
@@ -476,7 +484,7 @@ func (g *Game) GetTimeRemaining() int {
 
 func (g *Game) checkCollision(p Point) bool {
 	// Wall
-	if p.X <= 0 || p.X >= config.Width-1 || p.Y <= 0 || p.Y >= config.Height-1 {
+	if p.X <= 0 || p.X >= g.Width-1 || p.Y <= 0 || p.Y >= g.Height-1 {
 		return true
 	}
 	// All Players
@@ -501,12 +509,12 @@ func (g *Game) checkCollision(p Point) bool {
 func (g *Game) handleFoodCollision(pos Point, p *Player, isP1 bool) bool {
 	for i, food := range g.Foods {
 		if pos == food.Pos {
-			totalScore := food.GetTotalScore(config.Width, config.Height)
+			totalScore := food.GetTotalScore(g.Width, g.Height)
 			p.Score += totalScore
 			p.FoodEaten++
 
 			if isP1 {
-				bonusMsg := food.GetBonusMessage(config.Width, config.Height)
+				bonusMsg := food.GetBonusMessage(g.Width, g.Height)
 				if bonusMsg != "" {
 					g.SetMessageWithType(bonusMsg, "bonus")
 				}
@@ -559,10 +567,17 @@ func (g *Game) TogglePlayerAutoPlay(idx int, requestedMode string) {
 		}
 
 		if modeToUse == "neural" && g.NeuralNet != nil {
-			p.Brain = &NeuralController{}
-			p.Controller = "neural"
-			g.SetMessage(p.Name + ": 🧠 神经网络模型已注入")
-			log.Printf("[Game] Player %d (%s) switched to NEURAL controller", idx, p.Name)
+			if g.Width == config.StandardWidth && g.Height == config.StandardHeight {
+				p.Brain = &NeuralController{}
+				p.Controller = "neural"
+				g.SetMessage(p.Name + ": 🧠 神经网络模型已注入")
+				log.Printf("[Game] Player %d (%s) switched to NEURAL controller", idx, p.Name)
+			} else {
+				p.Brain = &HeuristicController{}
+				p.Controller = "heuristic"
+				g.SetMessage(p.Name + ": ⚠️ 当前尺寸无模型，已退化为启发式规则")
+				log.Printf("[Game] Player %d (%s) switched to HEURISTIC controller (dimension mismatch)", idx, p.Name)
+			}
 		} else {
 			p.Brain = &HeuristicController{}
 			p.Controller = "heuristic"
@@ -734,7 +749,7 @@ func (g *Game) spawnOneObstacle() {
 	var start Point
 	found := false
 	for attempts := 0; attempts < 50; attempts++ {
-		p := Point{X: rand.Intn(config.Width-4) + 2, Y: rand.Intn(config.Height-4) + 2}
+		p := Point{X: rand.Intn(g.Width-4) + 2, Y: rand.Intn(g.Height-4) + 2}
 		if g.isCellEmpty(p) {
 			start = p
 			found = true
@@ -753,7 +768,7 @@ func (g *Game) spawnOneObstacle() {
 		rand.Shuffle(len(dirs), func(i, j int) { dirs[i], dirs[j] = dirs[j], dirs[i] })
 		for _, d := range dirs {
 			next := Point{base.X + d.X, base.Y + d.Y}
-			if next.X > 1 && next.X < config.Width-2 && next.Y > 1 && next.Y < config.Height-2 && g.isCellEmpty(next) {
+			if next.X > 1 && next.X < g.Width-2 && next.Y > 1 && next.Y < g.Height-2 && g.isCellEmpty(next) {
 				already := false
 				for _, op := range points {
 					if op == next {
@@ -775,7 +790,7 @@ func (g *Game) spawnOneObstacle() {
 }
 
 func (g *Game) isCellEmpty(p Point) bool {
-	if p.X <= 0 || p.X >= config.Width-1 || p.Y <= 0 || p.Y >= config.Height-1 {
+	if p.X <= 0 || p.X >= g.Width-1 || p.Y <= 0 || p.Y >= g.Height-1 {
 		return false
 	}
 	for _, player := range g.Players {
@@ -904,7 +919,7 @@ func (g *Game) UpdateFireballs() {
 			fb.Pos.Y += fb.Dir.Y
 
 			// Wall collision
-			if fb.Pos.X <= 0 || fb.Pos.X >= config.Width-1 || fb.Pos.Y <= 0 || fb.Pos.Y >= config.Height-1 {
+			if fb.Pos.X <= 0 || fb.Pos.X >= g.Width-1 || fb.Pos.Y <= 0 || fb.Pos.Y >= g.Height-1 {
 				hit = true
 				g.HitPoints = append(g.HitPoints, fb.Pos)
 			}
@@ -1084,8 +1099,8 @@ func (g *Game) GetGameStateSnapshot(started bool, serverBoosting bool, difficult
 // GetGameConfig returns the current game configuration
 func (g *Game) GetGameConfig() GameConfig {
 	return GameConfig{
-		Width:            config.Width,
-		Height:           config.Height,
+		Width:            g.Width,
+		Height:           g.Height,
 		GameDuration:     int(config.GameDuration.Seconds()),
 		FireballCooldown: int(config.FireballCooldown.Milliseconds()),
 	}

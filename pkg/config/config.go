@@ -4,29 +4,31 @@ import "time"
 
 // Game board dimensions
 const (
-	Width        = 25 // Reduced width for emoji double-width
-	Height       = 25
-	GameDuration = 30 * time.Second
+	StandardWidth  = 25
+	StandardHeight = 25
+	LargeWidth     = 38
+	LargeHeight    = 38
+	GameDuration   = 60 * time.Second
 )
 
 // Food spawn settings
 const (
 	FoodSpawnInterval = 5 * time.Second
-	MaxFoodsOnBoard   = 5 // Maximum concurrent foods on board
+	MaxFoodsOnBoard   = 12 // Increased for larger board
 )
 
 // Obstacle settings
 const (
 	ObstacleSpawnInterval = 10 * time.Second
 	ObstacleDuration      = 30 * time.Second
-	MaxObstacles          = 4
+	MaxObstacles          = 8 // Increased for larger board
 )
 
 // Prop settings
 const (
 	PropSpawnInterval = 12 * time.Second
-	PropSpawnChance   = 20 // 20% chance every interval
-	MaxPropsOnBoard   = 2
+	PropSpawnChance   = 20               // 20% chance every interval
+	MaxPropsOnBoard   = 4                // Increased for larger board
 	PropDuration      = 15 * time.Second // Time before disappearing
 )
 

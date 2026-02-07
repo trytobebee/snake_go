@@ -65,6 +65,13 @@ func (c *HeuristicController) GetAction(g *Game, playerIdx int) ActionData {
 type NeuralController struct{}
 
 func (c *NeuralController) GetAction(g *Game, playerIdx int) ActionData {
+	// Fallback check: If board size is not standard 25x25, use heuristic AI
+	// as the model is currently only trained for 25x25.
+	if g.Width != config.StandardWidth || g.Height != config.StandardHeight {
+		hc := &HeuristicController{}
+		return hc.GetAction(g, playerIdx)
+	}
+
 	if playerIdx >= len(g.Players) || g.NeuralNet == nil {
 		// Fallback to Heuristic if NN not available
 		hc := &HeuristicController{}
@@ -135,8 +142,8 @@ func (g *Game) shouldAIFire(idx int, dir Point) bool {
 	for dist := 1; dist <= 8; dist++ {
 		look := Point{X: head.X + dir.X*dist, Y: head.Y + dir.Y*dist}
 
-		// If it's a wall, stop looking (using config bounds)
-		if look.X <= 0 || look.X >= config.Width-1 || look.Y <= 0 || look.Y >= config.Height-1 {
+		// If it's a wall, stop looking (using g instance bounds)
+		if look.X <= 0 || look.X >= g.Width-1 || look.Y <= 0 || look.Y >= g.Height-1 {
 			break
 		}
 

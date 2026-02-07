@@ -3,6 +3,8 @@ package game
 import (
 	"testing"
 	"time"
+
+	"github.com/trytobebee/snake_go/pkg/config"
 )
 
 // TestFoodExpirationWithPause tests that food timers pause correctly
@@ -74,7 +76,7 @@ func TestFoodExpirationDuringPause(t *testing.T) {
 
 // TestGamePauseIntegration tests the full integration with Game struct
 func TestGamePauseIntegration(t *testing.T) {
-	g := NewGame()
+	g := NewGame(config.StandardWidth, config.StandardHeight)
 
 	// Get initial total paused time (should be 0)
 	if g.GetTotalPausedTime() != 0 {
@@ -124,7 +126,7 @@ func TestGamePauseIntegration(t *testing.T) {
 // TestDirectionValidation tests that 180-degree turns are prevented,
 // even when multiple direction changes are attempted within a single tick.
 func TestDirectionValidation(t *testing.T) {
-	g := NewGame()
+	g := NewGame(config.StandardWidth, config.StandardHeight)
 	// Initial state: Direction={1,0}, LastMoveDir={1,0} (Moving Right)
 
 	// 1. Test basic 180-degree turn prevention

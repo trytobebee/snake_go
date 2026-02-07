@@ -23,10 +23,10 @@ func main() {
 	defer inputHandler.Stop()
 
 	// Initialize renderer
-	render := renderer.NewTerminalRenderer()
+	render := renderer.NewTerminalRenderer(config.LargeWidth, config.LargeHeight)
 
 	// Create new game
-	g := game.NewGame()
+	g := game.NewGame(config.LargeWidth, config.LargeHeight)
 
 	// Get input channel
 	inputChan := inputHandler.GetInputChan()
@@ -80,7 +80,7 @@ func main() {
 
 			if input.IsRestart(inputEvent) {
 				if g.GameOver {
-					g = game.NewGame()
+					g = game.NewGame(config.LargeWidth, config.LargeHeight)
 					boosting = false
 					tickCount = 0
 					consecutiveKeyCount = 0

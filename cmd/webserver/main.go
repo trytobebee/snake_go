@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -10,8 +11,6 @@ import (
 	"os"
 	"sync"
 	"time"
-
-	"crypto/rand"
 
 	"github.com/gorilla/websocket"
 	"github.com/joho/godotenv"
@@ -103,9 +102,9 @@ type GameServer struct {
 // ... (ServerMessage, ClientMessage structs unchanged)
 // No longer using internal ServerMessage/ClientMessage as they are now in proto package
 
-func NewGameServer(connID string) *GameServer {
+func NewGameServer(connID string, width, height int) *GameServer {
 	gs := &GameServer{
-		game:        game.NewGame(),
+		game:        game.NewGame(width, height),
 		ticker:      time.NewTicker(config.BaseTick),
 		difficulty:  "mid",
 		currentMode: "battle",
@@ -221,8 +220,8 @@ func (mm *MatchMaker) FindMatch(gs *GameServer) {
 
 	log.Printf("[PVP] ⚔️ Match found: %s (P1) vs %s (P2). Initializing shared game state...\n", p1.user.Username, p2.user.Username)
 
-	// Create shared game
-	sharedGame := game.NewGame()
+	// Create shared game - Use Standard size for PVP to ensure mobile compatibility
+	sharedGame := game.NewGame(config.StandardWidth, config.StandardHeight)
 	sharedGame.Mode = "pvp"
 	sharedGame.IsPVP = true
 	sharedGame.Paused = true // Start paused for countdown
@@ -230,7 +229,7 @@ func (mm *MatchMaker) FindMatch(gs *GameServer) {
 	// Reset players for PVP symmetry - Start them at different Y positions to avoid head-on crash
 	sharedGame.Players = []*game.Player{
 		{
-			Snake:       []game.Point{{X: config.Width / 4, Y: config.Height / 3}},
+			Snake:       []game.Point{{X: sharedGame.Width / 4, Y: sharedGame.Height / 3}},
 			Direction:   game.Point{X: 1, Y: 0},
 			LastMoveDir: game.Point{X: 1, Y: 0},
 			Name:        p1.user.Username,
@@ -238,7 +237,7 @@ func (mm *MatchMaker) FindMatch(gs *GameServer) {
 			Controller:  "manual",
 		},
 		{
-			Snake:       []game.Point{{X: (config.Width * 3) / 4, Y: (config.Height * 2) / 3}},
+			Snake:       []game.Point{{X: (sharedGame.Width * 3) / 4, Y: (sharedGame.Height * 2) / 3}},
 			Direction:   game.Point{X: -1, Y: 0},
 			LastMoveDir: game.Point{X: -1, Y: 0},
 			Name:        p2.user.Username,
@@ -474,7 +473,7 @@ func (gs *GameServer) handleAction(action string, mode string) {
 		gs.stopRecording()
 
 		if gs.game.GameOver {
-			gs.game = game.NewGame()
+			gs.game = game.NewGame(gs.game.Width, gs.game.Height)
 			gs.game.Mode = gs.currentMode
 			gs.game.TimerStarted = false
 			gs.started = false
@@ -492,13 +491,21 @@ func (gs *GameServer) handleAction(action string, mode string) {
 		gs.currentMode = "battle"
 		gs.game.Mode = "battle"
 		if len(gs.game.Players) < 2 {
+			// Decide which AI brain to use based on dimensions
+			var brain game.Controller = &game.HeuristicController{}
+			controller := "heuristic"
+			if gs.game.NeuralNet != nil && gs.game.Width == config.StandardWidth && gs.game.Height == config.StandardHeight {
+				brain = &game.NeuralController{}
+				controller = "neural"
+			}
+
 			gs.game.Players = append(gs.game.Players, &game.Player{
-				Snake:       []game.Point{{X: config.Width - 2, Y: config.Height - 2}},
+				Snake:       []game.Point{{X: gs.game.Width - 2, Y: gs.game.Height - 2}},
 				Direction:   game.Point{X: -1, Y: 0},
 				LastMoveDir: game.Point{X: -1, Y: 0},
 				Name:        "AI",
-				Brain:       &game.HeuristicController{},
-				Controller:  "heuristic",
+				Brain:       brain,
+				Controller:  controller,
 			})
 		}
 	case "diff_low":
@@ -940,7 +947,28 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	rand.Read(b)
 	connID := fmt.Sprintf("%x-%d", b, time.Now().UnixNano())
 
-	gs := NewGameServer(connID)
+	// Detect device type from User-Agent
+	userAgent := r.Header.Get("User-Agent")
+	width, height := config.StandardWidth, config.StandardHeight
+
+	// Simple check for mobile devices
+	isMobile := false
+	mobileKeywords := []string{"Mobile", "Android", "iPhone", "iPad", "Windows Phone", "Mobi"}
+	for _, kw := range mobileKeywords {
+		if bytes.Contains([]byte(userAgent), []byte(kw)) {
+			isMobile = true
+			break
+		}
+	}
+
+	if !isMobile {
+		width, height = config.LargeWidth, config.LargeHeight
+		log.Printf("[Server] Desktop detected. Using large game space: %dx%d\n", width, height)
+	} else {
+		log.Printf("[Server] Mobile detected. Using standard game space: %dx%d\n", width, height)
+	}
+
+	gs := NewGameServer(connID, width, height)
 
 	// Mutex to protect concurrent writes to the WebSocket connection
 	gs.sendMsg = func(v *pb.ServerMessage) error {

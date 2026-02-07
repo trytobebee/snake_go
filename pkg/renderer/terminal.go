@@ -26,11 +26,11 @@ const (
 )
 
 // NewTerminalRenderer creates a new terminal renderer
-func NewTerminalRenderer() *TerminalRenderer {
+func NewTerminalRenderer(width, height int) *TerminalRenderer {
 	// Pre-allocate board to reduce GC pressure
-	board := make([][]int, config.Height)
+	board := make([][]int, height)
 	for i := range board {
-		board[i] = make([]int, config.Width)
+		board[i] = make([]int, width)
 	}
 
 	return &TerminalRenderer{
@@ -69,7 +69,7 @@ func (r *TerminalRenderer) Render(g *game.Game, boosting bool) {
 	foodEmojis := make(map[game.Point]string)
 	timerEmojis := make(map[game.Point]string)
 	for _, food := range g.Foods {
-		foodEmojis[food.Pos] = food.GetEmojiWithTimer(config.Width, config.Height)
+		foodEmojis[food.Pos] = food.GetEmojiWithTimer(g.Width, g.Height)
 		// Show timer only when game is not over
 		if !g.GameOver {
 			timerEmoji := food.GetTimerEmoji(g.GetTotalPausedTime())
@@ -81,13 +81,13 @@ func (r *TerminalRenderer) Render(g *game.Game, boosting bool) {
 	}
 
 	// Draw walls
-	for x := 0; x < config.Width; x++ {
+	for x := 0; x < g.Width; x++ {
 		r.board[0][x] = cellWall
-		r.board[config.Height-1][x] = cellWall
+		r.board[g.Height-1][x] = cellWall
 	}
-	for y := 0; y < config.Height; y++ {
+	for y := 0; y < g.Height; y++ {
 		r.board[y][0] = cellWall
-		r.board[y][config.Width-1] = cellWall
+		r.board[y][g.Width-1] = cellWall
 	}
 
 	// Draw snake (P1)
@@ -114,8 +114,8 @@ func (r *TerminalRenderer) Render(g *game.Game, boosting bool) {
 
 	// Draw crash point if game over
 	if g.GameOver {
-		if g.CrashPoint.X >= 0 && g.CrashPoint.X < config.Width &&
-			g.CrashPoint.Y >= 0 && g.CrashPoint.Y < config.Height {
+		if g.CrashPoint.X >= 0 && g.CrashPoint.X < g.Width &&
+			g.CrashPoint.Y >= 0 && g.CrashPoint.Y < g.Height {
 			r.board[g.CrashPoint.Y][g.CrashPoint.X] = cellCrash
 		}
 	}
