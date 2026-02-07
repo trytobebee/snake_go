@@ -25,6 +25,7 @@ A professional, high-performance Snake game engine written in Go. Features a hig
 - ⚡ **Performance**: 16ms BaseTick (60 FPS) with centralized ONNX inference queue.
 - 📡 **Protobuf Communication**: Binary protocol reducing bandwidth by **80%** compared to JSON.
 - 📼 **Data Pipeline**: Automatic frame recording to `.jsonl` for offline AI training.
+- 📦 **Dynamic Prop System**: 7+ unique power-ups (Shield, TimeWarp, ScatterShot, etc.) with weighted spawning.
 - 📩 **Feedback Loop**: Integrated user feedback system with real-time **Feishu/Lark** notifications.
 
 ---
@@ -124,13 +125,21 @@ pip install -r ml/requirements.txt
 
 | Symbol | Meaning |
 |:---:|---|
-| � | **Player Head** (You) |
+| 🟢 | **Player Head** (You) |
 | 🟩 | **Player Body** |
 | 🤖 | **AI / Opponent** |
 | 🔴🟠🔵🟣 | **Food** (Various scores and durations) |
 | 🔥 | **Fireball** (Combat / Destroy obstacles) |
 | 🪨 | **Obstacle** (Destructible barrier) |
-| � | **Boost** (3x Speed) |
+| 🚀 | **Boost** (3x Speed) |
+| 🛡️ | **Shield** (Ignore 1 collision/hit) |
+| 🌀 | **Time Warp** (Time slows for everyone else) |
+| ✂️ | **Trimmer** (Instantly shortens body) |
+| 🧲 | **Magnet** (Attracts nearby food) |
+| ⚡ | **Rapid Fire** (Higher ROF & Bullet Speed) |
+| 🌟 | **Scatter Shot** (Fire 3 diagonal bullets) |
+| 👑 | **Big Chest** (Instant +120 Points) |
+| 💰 | **Money Bag** (Instant +20 Points) |
 
 ---
 
